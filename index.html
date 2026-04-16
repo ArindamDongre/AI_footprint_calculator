@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Footprint Calculator | Environmental Impact Estimator</title>
+    <meta name="description" content="Estimate the energy consumption, carbon emissions, and water usage of your AI model queries with our interactive calculator. Literature-backed, uncertainty-aware estimates.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Animated background orbs -->
+    <div class="bg-animation" aria-hidden="true">
+        <div class="bg-orb orb-1"></div>
+        <div class="bg-orb orb-2"></div>
+        <div class="bg-orb orb-3"></div>
+    </div>
+
+    <!-- ===== HEADER ===== -->
+    <header class="header" role="banner">
+        <div class="container">
+            <div class="logo">
+                <span class="logo-icon" aria-hidden="true">🌿</span>
+                <span class="logo-text">AI Footprint <span class="accent">Calculator</span></span>
+            </div>
+            <div class="header-badge">
+                <span class="badge-dot" aria-hidden="true"></span>
+                Inference-only estimates
+                <span class="tooltip-icon" data-tooltip="This tool estimates inference-only environmental costs. Pre-training, fine-tuning, and hardware manufacturing are out of scope." aria-label="Info" tabindex="0">ⓘ</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===== HERO ===== -->
+    <section class="hero" aria-labelledby="hero-title">
+        <div class="container">
+            <div class="hero-tag">COL8381 — Responsible AI</div>
+            <h1 class="hero-title" id="hero-title">
+                How much does your<br>
+                <span class="gradient-text">AI usage cost the planet?</span>
+            </h1>
+            <p class="hero-subtitle">
+                Estimate the hidden environmental impact of every AI query — energy, carbon emissions, and water consumption — with uncertainty ranges derived from peer-reviewed literature.
+            </p>
+            <div class="hero-stats" role="list">
+                <div class="hero-stat" role="listitem">
+                    <span class="stat-value">8 <span class="stat-unit">papers</span></span>
+                    <span class="stat-label">Literature-backed</span>
+                </div>
+                <div class="hero-stat" role="listitem">
+                    <span class="stat-value">3 <span class="stat-unit">metrics</span></span>
+                    <span class="stat-label">Energy · Carbon · Water</span>
+                </div>
+                <div class="hero-stat" role="listitem">
+                    <span class="stat-value">5 <span class="stat-unit">regions</span></span>
+                    <span class="stat-label">Grid-aware</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== MAIN CALCULATOR ===== -->
+    <main class="main" id="calculator">
+        <div class="container">
+
+            <!-- Calculator Grid: Inputs + Results -->
+            <div class="calculator-grid">
+
+                <!-- Inputs Panel -->
+                <aside class="inputs-panel glass-card" aria-label="Configuration panel">
+                    <div class="panel-header">
+                        <h2>⚙️ Configure Your Usage</h2>
+                        <p>Adjust parameters to match your AI usage pattern</p>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="model-type">
+                            Model Type
+                            <span class="tooltip-icon" data-tooltip="Larger models consume significantly more energy per query. Image generation is particularly expensive — up to 100× a small text model." aria-label="Info">ⓘ</span>
+                        </label>
+                        <select id="model-type" aria-describedby="model-type-desc">
+                            <option value="small">🔵 Small LLM (&lt; 7B params)</option>
+                            <option value="medium" selected>🟡 Medium LLM (7–70B params)</option>
+                            <option value="large">🔴 Large LLM (&gt; 70B params)</option>
+                            <option value="image">🎨 Image Generation</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="queries-per-day">
+                            Queries per Day: <span id="queries-display" class="value-display" aria-live="polite">50</span>
+                            <span class="tooltip-icon" data-tooltip="Total number of prompts or requests you send to AI systems each day across all platforms." aria-label="Info">ⓘ</span>
+                        </label>
+                        <input type="range" id="queries-per-day" min="1" max="1000" value="50" step="1" aria-valuemin="1" aria-valuemax="1000" aria-valuenow="50">
+                        <div class="range-labels" aria-hidden="true">
+                            <span>1</span><span>250</span><span>500</span><span>750</span><span>1000</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="prompt-length">
+                            Prompt Length
+                            <span class="tooltip-icon" data-tooltip="Longer prompts require more computation at inference time, increasing energy use by up to 3× compared to very short prompts." aria-label="Info">ⓘ</span>
+                        </label>
+                        <select id="prompt-length">
+                            <option value="short">Short (&lt; 50 tokens)</option>
+                            <option value="medium" selected>Medium (50–200 tokens)</option>
+                            <option value="long">Long (200–500 tokens)</option>
+                            <option value="verylong">Very Long (500+ tokens)</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="hardware">
+                            Data Center Hardware
+                            <span class="tooltip-icon" data-tooltip="Newer accelerators (H100, A100) are ~30–40% more energy-efficient than older hardware. Most large providers use modern hardware." aria-label="Info">ⓘ</span>
+                        </label>
+                        <select id="hardware">
+                            <option value="efficient">🟢 Modern / Efficient (H100, A100)</option>
+                            <option value="average" selected>🟡 Average (V100, T4)</option>
+                            <option value="older">🔴 Older Generation</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="region">
+                            Grid / Region
+                            <span class="tooltip-icon" data-tooltip="Carbon intensity varies hugely by region. Renewable grids can emit 18× less CO₂ per kWh than coal-heavy grids. Source: Dodge et al. (2022)." aria-label="Info">ⓘ</span>
+                        </label>
+                        <select id="region">
+                            <option value="renewable">🌿 Renewable-heavy (Norway, Iceland)</option>
+                            <option value="eu">🇪🇺 EU Average</option>
+                            <option value="us">🇺🇸 US Average</option>
+                            <option value="india" selected>🇮🇳 India</option>
+                            <option value="coal">⚫ Coal-heavy Grid</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Projection Horizon</label>
+                        <div class="btn-group" id="time-horizon" role="group" aria-label="Time horizon">
+                            <button class="btn-option" data-value="daily" id="btn-daily">Daily</button>
+                            <button class="btn-option active" data-value="monthly" id="btn-monthly">Monthly</button>
+                            <button class="btn-option" data-value="yearly" id="btn-yearly">Yearly</button>
+                        </div>
+                    </div>
+
+                    <div class="sources-note" role="note">
+                        <span aria-hidden="true">📚</span>
+                        Parameters from Luccioni et al. (2023), Ren et al. (2023), Dodge et al. (2022), IEA 2023
+                    </div>
+                </aside>
+
+                <!-- Results Area -->
+                <div class="results-area">
+                    <div class="results-header">
+                        <h2>📊 Results <span class="results-subtitle">— per query</span></h2>
+                        <div class="uncertainty-badge" aria-label="Uncertainty range shown as Min / Avg / Max">Min / Avg / Max</div>
+                    </div>
+
+                    <!-- Per-Query Metric Cards -->
+                    <div class="metrics-grid" role="region" aria-label="Per-query metrics">
+                        <div class="metric-card energy-card glass-card">
+                            <div class="metric-icon" aria-hidden="true">⚡</div>
+                            <div class="metric-label">Energy per Query</div>
+                            <div class="metric-values">
+                                <span class="metric-avg" id="energy-avg" aria-live="polite">—</span>
+                                <span class="metric-unit">kWh</span>
+                            </div>
+                            <div class="metric-range">
+                                <span id="energy-min">—</span> – <span id="energy-max">—</span> kWh
+                            </div>
+                            <div class="metric-bar-container" aria-hidden="true">
+                                <div class="metric-bar energy-bar" id="energy-bar"></div>
+                            </div>
+                        </div>
+
+                        <div class="metric-card carbon-card glass-card">
+                            <div class="metric-icon" aria-hidden="true">💨</div>
+                            <div class="metric-label">Carbon per Query</div>
+                            <div class="metric-values">
+                                <span class="metric-avg" id="carbon-avg" aria-live="polite">—</span>
+                                <span class="metric-unit">gCO₂e</span>
+                            </div>
+                            <div class="metric-range">
+                                <span id="carbon-min">—</span> – <span id="carbon-max">—</span> gCO₂e
+                            </div>
+                            <div class="metric-bar-container" aria-hidden="true">
+                                <div class="metric-bar carbon-bar" id="carbon-bar"></div>
+                            </div>
+                        </div>
+
+                        <div class="metric-card water-card glass-card">
+                            <div class="metric-icon" aria-hidden="true">💧</div>
+                            <div class="metric-label">Water per Query</div>
+                            <div class="metric-values">
+                                <span class="metric-avg" id="water-avg" aria-live="polite">—</span>
+                                <span class="metric-unit">mL</span>
+                            </div>
+                            <div class="metric-range">
+                                <span id="water-min">—</span> – <span id="water-max">—</span> mL
+                            </div>
+                            <div class="metric-bar-container" aria-hidden="true">
+                                <div class="metric-bar water-bar" id="water-bar"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cumulative Projection Card -->
+                    <div class="cumulative-card glass-card" role="region" aria-label="Cumulative impact">
+                        <div class="cumulative-header">
+                            <h3>📈 Cumulative Impact</h3>
+                            <span class="period-label" id="period-label" aria-live="polite">Monthly</span>
+                        </div>
+                        <div class="cumulative-grid">
+                            <div class="cumul-item">
+                                <span class="cumul-icon" aria-hidden="true">⚡</span>
+                                <span class="cumul-value" id="cumul-energy" aria-live="polite">—</span>
+                                <span class="cumul-unit">kWh</span>
+                                <span class="cumul-label">Energy</span>
+                            </div>
+                            <div class="cumul-item">
+                                <span class="cumul-icon" aria-hidden="true">💨</span>
+                                <span class="cumul-value" id="cumul-carbon" aria-live="polite">—</span>
+                                <span class="cumul-unit">gCO₂e</span>
+                                <span class="cumul-label">Carbon</span>
+                            </div>
+                            <div class="cumul-item">
+                                <span class="cumul-icon" aria-hidden="true">💧</span>
+                                <span class="cumul-value" id="cumul-water" aria-live="polite">—</span>
+                                <span class="cumul-unit">L</span>
+                                <span class="cumul-label">Water</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== CHARTS ROW ===== -->
+            <section class="charts-section" aria-labelledby="charts-heading">
+                <h2 id="charts-heading" class="visually-hidden">Visualizations</h2>
+                <div class="charts-grid">
+                    <div class="chart-card glass-card">
+                        <h3>Impact Relative to Maximum (∿ % scale)</h3>
+                        <p class="chart-sub">How your configuration compares to the worst-case scenario across all parameters</p>
+                        <div class="chart-wrapper">
+                            <canvas id="metricsChart" aria-label="Per-query metrics chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card glass-card">
+                        <h3>Cumulative Carbon Over 12 Months</h3>
+                        <p class="chart-sub">Projected carbon emissions with min / avg / max uncertainty band</p>
+                        <div class="chart-wrapper">
+                            <canvas id="cumulativeChart" aria-label="Cumulative carbon chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== REAL-WORLD EQUIVALENTS ===== -->
+            <section class="equivalents-section" aria-labelledby="equiv-heading">
+                <div class="section-header">
+                    <h2 id="equiv-heading">🌍 Real-World Equivalents</h2>
+                    <p>What does your estimated <strong id="equiv-period">monthly</strong> AI usage actually mean?</p>
+                </div>
+                <div class="equivalents-grid" role="list">
+                    <div class="equiv-card glass-card" role="listitem">
+                        <span class="equiv-icon" aria-hidden="true">📱</span>
+                        <div class="equiv-value" id="eq-phone">—</div>
+                        <div class="equiv-label">Smartphone charges</div>
+                        <div class="equiv-sub">~10 Wh per full charge</div>
+                    </div>
+                    <div class="equiv-card glass-card" role="listitem">
+                        <span class="equiv-icon" aria-hidden="true">🚗</span>
+                        <div class="equiv-value" id="eq-car">—</div>
+                        <div class="equiv-label">km driven by car</div>
+                        <div class="equiv-sub">~192 gCO₂e per km</div>
+                    </div>
+                    <div class="equiv-card glass-card" role="listitem">
+                        <span class="equiv-icon" aria-hidden="true">🫙</span>
+                        <div class="equiv-value" id="eq-water">—</div>
+                        <div class="equiv-label">500 mL water bottles</div>
+                        <div class="equiv-sub">Direct + indirect cooling</div>
+                    </div>
+                    <div class="equiv-card glass-card" role="listitem">
+                        <span class="equiv-icon" aria-hidden="true">🌳</span>
+                        <div class="equiv-value" id="eq-tree">—</div>
+                        <div class="equiv-label">Trees needed to offset</div>
+                        <div class="equiv-sub">~21 kg CO₂ absorbed per tree/year</div>
+                    </div>
+                    <div class="equiv-card glass-card" role="listitem">
+                        <span class="equiv-icon" aria-hidden="true">🏠</span>
+                        <div class="equiv-value" id="eq-house">—</div>
+                        <div class="equiv-label">% of household electricity</div>
+                        <div class="equiv-sub">~3,500 kWh/year average</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== SENSITIVITY ANALYSIS ===== -->
+            <section class="sensitivity-section" aria-labelledby="sens-heading">
+                <div class="section-header">
+                    <h2 id="sens-heading">🎛️ Sensitivity Analysis</h2>
+                    <p>Which parameter has the largest impact on your carbon footprint?</p>
+                </div>
+                <div class="chart-card glass-card sensitivity-card">
+                    <canvas id="sensitivityChart" aria-label="Sensitivity analysis chart"></canvas>
+                </div>
+            </section>
+
+            <!-- ===== CASE STUDIES ===== -->
+            <section class="case-studies-section" aria-labelledby="cs-heading">
+                <div class="section-header">
+                    <h2 id="cs-heading">👥 Usage Case Studies</h2>
+                    <p>Pre-computed estimates for three representative user profiles (India grid, average hardware)</p>
+                </div>
+                <div class="case-studies-grid">
+
+                    <div class="case-card student-case glass-card">
+                        <span class="case-icon" aria-hidden="true">🎓</span>
+                        <h3>Student</h3>
+                        <p class="case-description">Using a medium LLM (e.g., ChatGPT) for assignments, coding help, and summarization</p>
+                        <div class="case-params" aria-label="Profile parameters">
+                            <span class="param-tag">30–50 queries/day</span>
+                            <span class="param-tag">Medium LLM</span>
+                            <span class="param-tag">Medium prompts</span>
+                            <span class="param-tag">India grid</span>
+                        </div>
+                        <div class="case-metrics">
+                            <div class="case-metric">
+                                <span class="cmetric-label">⚡ Daily energy</span>
+                                <span class="cmetric-value" id="cs-student-energy">—</span>
+                            </div>
+                            <div class="case-metric">
+                                <span class="cmetric-label">💨 Monthly carbon</span>
+                                <span class="cmetric-value" id="cs-student-carbon">—</span>
+                            </div>
+                            <div class="case-metric">
+                                <span class="cmetric-label">💧 Monthly water</span>
+                                <span class="cmetric-value" id="cs-student-water">—</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="case-card professional-case glass-card">
+                        <span class="case-icon" aria-hidden="true">💼</span>
+                        <h3>Working Professional</h3>
+                        <p class="case-description">Developer using large LLMs for code generation, debugging, and content creation</p>
+                        <div class="case-params" aria-label="Profile parameters">
+                            <span class="param-tag">200–300 queries/day</span>
+                            <span class="param-tag">Large LLM</span>
+                            <span class="param-tag">Long prompts</span>
+                            <span class="param-tag">US grid</span>
+                        </div>
+                        <div class="case-metrics">
+                            <div class="case-metric">
+                                <span class="cmetric-label">⚡ Daily energy</span>
+                                <span class="cmetric-value" id="cs-pro-energy">—</span>
+                            </div>
+                            <div class="case-metric">
+                                <span class="cmetric-label">💨 Monthly carbon</span>
+                                <span class="cmetric-value" id="cs-pro-carbon">—</span>
+                            </div>
+                            <div class="case-metric">
+                                <span class="cmetric-label">💧 Monthly water</span>
+                                <span class="cmetric-value" id="cs-pro-water">—</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="case-card heavy-case glass-card">
+                        <span class="case-icon" aria-hidden="true">🔬</span>
+                        <h3>Heavy AI User / Researcher</h3>
+                        <p class="case-description">Researcher using large LLMs + image generation for prototyping, experiments, and content</p>
+                        <div class="case-params" aria-label="Profile parameters">
+                            <span class="param-tag">500+ queries/day</span>
+                            <span class="param-tag">Large LLM + Image Gen</span>
+                            <span class="param-tag">Long prompts</span>
+                            <span class="param-tag">US grid</span>
+                        </div>
+                        <div class="case-metrics">
+                            <div class="case-metric">
+                                <span class="cmetric-label">⚡ Daily energy</span>
+                                <span class="cmetric-value" id="cs-heavy-energy">—</span>
+                            </div>
+                            <div class="case-metric">
+                                <span class="cmetric-label">💨 Monthly carbon</span>
+                                <span class="cmetric-value" id="cs-heavy-carbon">—</span>
+                            </div>
+                            <div class="case-metric">
+                                <span class="cmetric-label">💧 Monthly water</span>
+                                <span class="cmetric-value" id="cs-heavy-water">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case study comparison chart -->
+                <div class="chart-card glass-card" style="margin-top: 2rem;">
+                    <h3>Monthly Carbon Footprint — User Profile Comparison</h3>
+                    <p class="chart-sub">Contrast between casual, professional, and intensive AI usage</p>
+                    <div class="chart-wrapper">
+                        <canvas id="caseStudyChart" aria-label="Case study comparison chart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer" role="contentinfo">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <h4>Methodology</h4>
+                    <p>
+                        Energy estimates follow Luccioni et al. (2023). Carbon intensity by region from Dodge et al. (2022). Water consumption model from Ren et al. (2023). PUE ranges from IEA Electricity 2023. All values shown with min / avg / max uncertainty ranges.
+                    </p>
+                </div>
+                <div class="footer-col">
+                    <h4>Scope Disclaimer</h4>
+                    <p>
+                        This tool estimates <strong>inference-only</strong> environmental costs. Pre-training, fine-tuning, hardware manufacturing (embodied carbon), and scope-3 emissions are explicitly out of scope. Estimates are educational approximations, not audit instruments.
+                    </p>
+                </div>
+                <div class="footer-col">
+                    <h4>Key References</h4>
+                    <ul class="refs-list">
+                        <li>Luccioni et al. (2023) — BLOOM carbon footprint (JMLR)</li>
+                        <li>Ren et al. (2023) — AI water footprint (arXiv:2304.03271)</li>
+                        <li>Dodge et al. (2022) — Carbon intensity of AI (ACM FAccT)</li>
+                        <li>Patterson et al. (2021) — Large NN training (arXiv:2104.10350)</li>
+                        <li>IEA Electricity 2023 — Data-center PUE</li>
+                        <li>GPTFootprint (2025) — Comparable browser tool</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>COL8381 — Special Topics in AI: Responsible AI</span>
+                <span>2025MCS2092 &amp; 2025MCS2096</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Floating tooltip -->
+    <div class="tooltip-popup" id="tooltip-popup" role="tooltip" aria-hidden="true"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
