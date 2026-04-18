@@ -127,16 +127,15 @@ function calculate(model, queriesPerDay, prompt, hardware, region) {
         max: facilityE.max * R.carbon.max,
     };
 
-    // Water per query (mL) = facilityE [kWh] × total_water_factor [L/kWh] × 1000
-    const waterFactor = {
-        min: (W.onsite.min + W.ewif.min) * 1000,
-        avg: (W.onsite.avg + W.ewif.avg) * 1000,
-        max: (W.onsite.max + W.ewif.max) * 1000,
+    // Water per query (mL)
+    // Correct Li et al. formula: W = E_server × ρ_s1 + E_facility × ρ_s2
+    // On-site water (ρ_s1) scales with server energy (cooling the chips)
+    // Off-site water (ρ_s2) scales with facility energy (power plant water)
+    const water = {
+        min: (serverE.min * W.onsite.min + facilityE.min * W.ewif.min) * 1000,
+        avg: (serverE.avg * W.onsite.avg + facilityE.avg * W.ewif.avg) * 1000,
+        max: (serverE.max * W.onsite.max + facilityE.max * W.ewif.max) * 1000,
     };
-    const water = mul(waterFactor, 1);  // structure ready
-    water.min = facilityE.min * waterFactor.min;
-    water.avg = facilityE.avg * waterFactor.avg;
-    water.max = facilityE.max * waterFactor.max;
 
     // Cumulative projections
     const periods = { daily: queriesPerDay, monthly: queriesPerDay * 30, yearly: queriesPerDay * 365 };
@@ -188,8 +187,8 @@ let timeHorizon = 'monthly';
 
 /** Shared Chart.js default overrides */
 function applyChartDefaults() {
-    Chart.defaults.color              = '#4a7c59';
-    Chart.defaults.borderColor        = 'rgba(74,222,128,0.08)';
+    Chart.defaults.color              = '#3d6b42';
+    Chart.defaults.borderColor        = 'rgba(22,163,74,0.1)';
     Chart.defaults.font.family        = "'Inter', sans-serif";
     Chart.defaults.font.size          = 11;
     Chart.defaults.plugins.legend.labels.boxWidth = 12;
@@ -206,22 +205,22 @@ function initCharts() {
             datasets: [
                 {
                     label: 'Min', data: [0, 0, 0], borderRadius: 5, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.25)',
+                    backgroundColor: 'rgba(22,163,74,0.2)',
                 },
                 {
                     label: 'Avg', data: [0, 0, 0], borderRadius: 5, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.65)',
+                    backgroundColor: 'rgba(22,163,74,0.5)',
                 },
                 {
                     label: 'Max', data: [0, 0, 0], borderRadius: 5, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.95)',
+                    backgroundColor: 'rgba(22,163,74,0.85)',
                 },
             ],
         },
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: {
-                legend:  { labels: { color: '#86efac', padding: 14 } },
+                legend:  { labels: { color: '#16a34a', padding: 14 } },
                 tooltip: {
                     callbacks: {
                         label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}% of worst-case`,
@@ -229,11 +228,11 @@ function initCharts() {
                 },
             },
             scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a7c59', font: { size: 12, weight: '600' } } },
+                x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b9a70', font: { size: 12, weight: '600' } } },
                 y: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => v + '%' },
-                    title: { display: true, text: '% of worst-case scenario', color: '#4a7c59', font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { color: '#6b9a70', callback: v => v + '%' },
+                    title: { display: true, text: '% of worst-case scenario', color: '#6b9a70', font: { size: 10 } },
                 },
             },
         },
@@ -248,22 +247,22 @@ function initCharts() {
             datasets: [
                 {
                     label: 'Min', tension: 0.4, borderWidth: 1.5,
-                    borderColor: 'rgba(74,222,128,0.35)',
-                    backgroundColor: 'rgba(74,222,128,0.04)',
+                    borderColor: 'rgba(22,163,74,0.25)',
+                    backgroundColor: 'rgba(22,163,74,0.04)',
                     fill: '+1', pointRadius: 2, pointHoverRadius: 5,
                     data: new Array(12).fill(0),
                 },
                 {
                     label: 'Avg', tension: 0.4, borderWidth: 2.5,
-                    borderColor: '#4ade80',
-                    backgroundColor: 'rgba(74,222,128,0.10)',
+                    borderColor: '#16a34a',
+                    backgroundColor: 'rgba(22,163,74,0.08)',
                     fill: false, pointRadius: 3, pointHoverRadius: 7,
                     data: new Array(12).fill(0),
                 },
                 {
                     label: 'Max', tension: 0.4, borderWidth: 1.5,
-                    borderColor: 'rgba(74,222,128,0.35)',
-                    backgroundColor: 'rgba(74,222,128,0.04)',
+                    borderColor: 'rgba(22,163,74,0.25)',
+                    backgroundColor: 'rgba(22,163,74,0.04)',
                     fill: '-1', pointRadius: 2, pointHoverRadius: 5,
                     data: new Array(12).fill(0),
                 },
@@ -273,7 +272,7 @@ function initCharts() {
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: '#86efac', padding: 14 } },
+                legend: { labels: { color: '#16a34a', padding: 14 } },
                 tooltip: {
                     callbacks: {
                         label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)} gCO₂e`,
@@ -281,11 +280,11 @@ function initCharts() {
                 },
             },
             scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a7c59' } },
+                x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b9a70' } },
                 y: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => fmt(v) },
-                    title: { display: true, text: 'Cumulative gCO₂e', color: '#4a7c59', font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { color: '#6b9a70', callback: v => fmt(v) },
+                    title: { display: true, text: 'Cumulative gCO₂e', color: '#6b9a70', font: { size: 10 } },
                 },
             },
         },
@@ -301,11 +300,11 @@ function initCharts() {
                 data: [0, 0, 0, 0, 0],
                 borderRadius: 5, borderWidth: 0,
                 backgroundColor: [
-                    'rgba(248,113,113,0.75)',
-                    'rgba(74,222,128,0.75)',
-                    'rgba(251,146,60,0.75)',
-                    'rgba(96,165,250,0.75)',
-                    'rgba(250,204,21,0.75)',
+                    'rgba(220,38,38,0.65)',
+                    'rgba(22,163,74,0.65)',
+                    'rgba(234,88,12,0.65)',
+                    'rgba(37,99,235,0.65)',
+                    'rgba(202,138,4,0.65)',
                 ],
             }],
         },
@@ -322,11 +321,11 @@ function initCharts() {
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => v + '%' },
-                    title: { display: true, text: 'Relative spread in avg carbon estimate (%)', color: '#4a7c59', font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { color: '#6b9a70', callback: v => v + '%' },
+                    title: { display: true, text: 'Relative spread in avg carbon estimate (%)', color: '#6b9a70', font: { size: 10 } },
                 },
-                y: { grid: { display: false }, ticks: { color: '#86efac', font: { size: 11 } } },
+                y: { grid: { display: false }, ticks: { color: '#16a34a', font: { size: 11 } } },
             },
         },
     });
@@ -339,32 +338,32 @@ function initCharts() {
             datasets: [
                 {
                     label: 'Min (gCO₂e/month)', data: [0,0,0], borderRadius: 6, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.35)',
+                    backgroundColor: 'rgba(22,163,74,0.25)',
                 },
                 {
                     label: 'Avg (gCO₂e/month)', data: [0,0,0], borderRadius: 6, borderWidth: 0,
-                    backgroundColor: 'rgba(45,212,191,0.70)',
+                    backgroundColor: 'rgba(13,148,136,0.6)',
                 },
                 {
                     label: 'Max (gCO₂e/month)', data: [0,0,0], borderRadius: 6, borderWidth: 0,
-                    backgroundColor: 'rgba(251,146,60,0.70)',
+                    backgroundColor: 'rgba(234,88,12,0.6)',
                 },
             ],
         },
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: {
-                legend: { labels: { color: '#86efac', padding: 14 } },
+                legend: { labels: { color: '#16a34a', padding: 14 } },
                 tooltip: {
                     callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)} gCO₂e/mo` },
                 },
             },
             scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a7c59', font: { size: 12 } } },
+                x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b9a70', font: { size: 12 } } },
                 y: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => fmt(v) },
-                    title: { display: true, text: 'gCO₂e / month', color: '#4a7c59', font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { color: '#6b9a70', callback: v => fmt(v) },
+                    title: { display: true, text: 'gCO₂e / month', color: '#6b9a70', font: { size: 10 } },
                 },
             },
         },
@@ -621,4 +620,296 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial full calculation
     updateAll();
+
+    // Ctrl+Enter shortcut for prompt analysis
+    document.getElementById('user-prompt').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); analyzePrompt(); }
+    });
 });
+
+/* ================================================================
+   9. PROMPT-LEVEL ANALYSIS ENGINE
+   Uses empirically measured α_m from Kaggle T4 + CodeCarbon
+   ================================================================ */
+
+const MEASURED_MODELS = {
+    'flan-t5-base': {
+        alpha_m: 6.4e-5,       // kWh/query — measured with CodeCarbon on Kaggle T4
+        ref_output: 104.0,     // avg output tokens in calibration dataset
+        ref_input: 37.96,      // avg input tokens in calibration dataset
+        type: 'seq2seq',
+        params: '250M',
+        label: 'Flan-T5 Base',
+    },
+    'qwen-0.5b': {
+        alpha_m: 1.83e-4,      // kWh/query — measured with CodeCarbon on Kaggle T4
+        ref_output: 154.8,
+        ref_input: 64.8,
+        type: 'causal',
+        params: '500M',
+        label: 'Qwen 2.5 0.5B',
+    },
+};
+
+const PROMPT_REGIONS = {
+    renewable: { carbon: 100,  name: 'Renewable' },
+    eu:        { carbon: 275,  name: 'EU Average' },
+    us:        { carbon: 440,  name: 'US Average' },
+    india:     { carbon: 675,  name: 'India' },
+    coal:      { carbon: 800,  name: 'Coal-heavy' },
+};
+
+// Infrastructure defaults for prompt analysis
+const PROMPT_INFRA = {
+    pue: 1.20,        // slightly above best-case, realistic
+    rho_s1: 0.55,     // Li et al. US avg on-site WUE
+    rho_s2: 3.14,     // Li et al. US avg off-site EWIF
+};
+
+// Keyword detection for output length prediction
+const LEN_KW = {
+    very_short: ['one word', 'single word', 'yes or no', 'true or false'],
+    short:      ['briefly', 'in short', 'concise', 'one sentence', 'tl;dr'],
+    long:       ['in detail', 'detailed', 'step by step', 'step-by-step', 'thoroughly'],
+    very_long:  ['comprehensively', 'extensive', 'multiple examples', 'elaborate', 'exhaustive'],
+};
+const TASK_KW = {
+    classification: ['classify', 'sentiment', 'categorize', 'positive or negative', 'label'],
+    summarization:  ['summarize', 'summary', 'tldr', 'tl;dr', 'gist'],
+    qa:             ['?', 'what is', 'why ', 'how ', 'when ', 'where ', 'who '],
+    generation:     ['write', 'create', 'generate', 'compose', 'draft', 'describe', 'explain', 'story'],
+};
+
+function countTokensApprox(text) {
+    return Math.max(1, Math.ceil(text.split(/\s+/).filter(Boolean).length * 1.3));
+}
+
+function detectTaskType(prompt) {
+    const p = prompt.toLowerCase();
+    for (const [task, kws] of Object.entries(TASK_KW)) {
+        if (kws.some(k => p.includes(k))) return task;
+    }
+    return 'general';
+}
+
+function detectLengthInstruction(prompt) {
+    const p = prompt.toLowerCase();
+    if (LEN_KW.very_short.some(k => p.includes(k))) return 'very_short';
+    if (LEN_KW.short.some(k => p.includes(k)))      return 'short';
+    if (LEN_KW.very_long.some(k => p.includes(k)))  return 'very_long';
+    if (LEN_KW.long.some(k => p.includes(k)))       return 'long';
+    return 'default';
+}
+
+function predictBetaL(prompt, modelKey) {
+    const p = prompt.toLowerCase();
+    const cfg = MEASURED_MODELS[modelKey];
+
+    // Length multiplier
+    let lenMul = 1.0;
+    if (LEN_KW.very_short.some(k => p.includes(k)))  lenMul = 0.05;
+    else if (LEN_KW.short.some(k => p.includes(k)))   lenMul = 0.30;
+    else if (LEN_KW.very_long.some(k => p.includes(k))) lenMul = 3.50;
+    else if (LEN_KW.long.some(k => p.includes(k)))    lenMul = 2.20;
+
+    // Task multiplier
+    let taskMul = 1.0;
+    if (TASK_KW.classification.some(k => p.includes(k))) taskMul = 0.15;
+    else if (TASK_KW.summarization.some(k => p.includes(k))) taskMul = 0.70;
+    else if (TASK_KW.generation.some(k => p.includes(k))) taskMul = 1.80;
+
+    const predicted = cfg.ref_output * lenMul * taskMul;
+    return Math.max(0.02, predicted / cfg.ref_output);
+}
+
+function computePromptFootprint(prompt, modelKey, regionKey) {
+    const cfg = MEASURED_MODELS[modelKey];
+    const region = PROMPT_REGIONS[regionKey];
+    const infra = PROMPT_INFRA;
+
+    const beta_l = predictBetaL(prompt, modelKey);
+    const gamma_h = 1.0; // measured on deployment hardware
+    const inputTokens = countTokensApprox(prompt);
+    const predictedOutput = Math.round(cfg.ref_output * beta_l);
+
+    // Formula chain: E_q = α_m × β_ℓ × γ_h × PUE
+    const E_server = cfg.alpha_m * beta_l * gamma_h;
+    const E_facility = E_server * infra.pue;
+    const C_q = E_facility * region.carbon;
+    // Li et al.: W = E_server × ρ_s1 + E_facility × ρ_s2
+    const W_q_liters = E_server * infra.rho_s1 + E_facility * infra.rho_s2;
+    const W_q_ml = W_q_liters * 1000;
+
+    return {
+        beta_l, inputTokens, predictedOutput,
+        E_server, E_facility, C_q, W_q_ml,
+        phoneCharges: E_facility / 0.022,
+        drivingMeters: (C_q / 404) * 1609,
+        waterCups: W_q_ml / 240,
+        task: detectTaskType(prompt),
+        lengthInst: detectLengthInstruction(prompt),
+    };
+}
+
+function splitPromptPhrases(prompt) {
+    return prompt.split(/([.!?,;:]|\s(?:and|but|or|with)\s)/i)
+        .map(p => p.trim())
+        .filter(p => p.length > 3 && !/^[.!?,;:]$/.test(p));
+}
+
+function computePromptAttributions(prompt, modelKey, regionKey) {
+    const baseline = computePromptFootprint(prompt, modelKey, regionKey);
+    const phrases = splitPromptPhrases(prompt);
+    const results = [];
+    for (const phrase of phrases) {
+        const ablated = prompt.replace(phrase, '').replace(/\s{2,}/g, ' ').trim();
+        if (ablated.length < 5) continue;
+        const abl = computePromptFootprint(ablated, modelKey, regionKey);
+        const dc = baseline.C_q - abl.C_q;
+        const dw = baseline.W_q_ml - abl.W_q_ml;
+        if (Math.abs(dc) > 0.00001) results.push({ phrase, deltaCarbon: dc, deltaWater: dw });
+    }
+    results.sort((a, b) => Math.abs(b.deltaCarbon) - Math.abs(a.deltaCarbon));
+    return results.slice(0, 8);
+}
+
+function getPromptSuggestions(prompt, modelKey, result) {
+    const s = [];
+    const p = prompt.toLowerCase();
+    const mtype = MEASURED_MODELS[modelKey].type;
+
+    if (['default', 'long', 'very_long'].includes(result.lengthInst)) {
+        const pct = result.lengthInst === 'very_long' ? 75 : result.lengthInst === 'long' ? 50 : 30;
+        s.push({ icon: '✂️', text: 'Add "Answer briefly" or "Answer in 2 sentences" to constrain output length.', savings: pct });
+    }
+    if (result.task === 'classification' && mtype === 'causal') {
+        s.push({ icon: '🔄', text: 'Classification tasks run ~200× cheaper on a small BERT model (e.g. distilbert-sst2). Source: Luccioni et al. Fig 3.', savings: 99 });
+    }
+    if (p.includes('step by step') || p.includes('in detail')) {
+        s.push({ icon: '📝', text: 'Remove "in detail" / "step by step" — these roughly double output length and energy. Source: our calibration β_ℓ coefficient.', savings: 50 });
+    }
+    if (p.includes('example') || p.includes('examples')) {
+        s.push({ icon: '💡', text: 'Requesting "examples" increases output significantly. Consider asking for just one.', savings: 30 });
+    }
+    if (s.length === 0) {
+        s.push({ icon: '✅', text: 'Your prompt looks reasonably efficient. No major savings detected.', savings: 0 });
+    }
+    return s;
+}
+
+/* ── Main analyze function ── */
+function analyzePrompt() {
+    const prompt = document.getElementById('user-prompt').value.trim();
+    if (!prompt) return;
+
+    const modelKey = document.getElementById('prompt-model').value;
+    const regionKey = document.getElementById('prompt-region').value;
+    const cfg = MEASURED_MODELS[modelKey];
+    const region = PROMPT_REGIONS[regionKey];
+
+    const r = computePromptFootprint(prompt, modelKey, regionKey);
+    const attrs = computePromptAttributions(prompt, modelKey, regionKey);
+    const suggs = getPromptSuggestions(prompt, modelKey, r);
+
+    // Show results area
+    document.getElementById('prompt-results').classList.remove('hidden');
+
+    // Badges
+    document.getElementById('prompt-badges').innerHTML = [
+        ['Task', r.task],
+        ['Length', r.lengthInst.replace('_', ' ')],
+        ['β_ℓ', r.beta_l.toFixed(2)],
+        ['Tokens (in)', r.inputTokens],
+        ['Tokens (out est.)', r.predictedOutput],
+        ['Model', cfg.label + ' (' + cfg.params + ')'],
+        ['Architecture', cfg.type],
+        ['Region', region.name],
+    ].map(([l, v]) => `<span class="p-badge"><span class="p-badge-label">${l}:</span> <span class="p-badge-value">${v}</span></span>`).join('');
+
+    // Metrics
+    const fmtE = r.E_facility < 0.001 ? (r.E_facility * 1e6).toFixed(1) + ' µWh' : (r.E_facility * 1000).toFixed(3) + ' Wh';
+    const fmtC = r.C_q < 0.01 ? (r.C_q * 1000).toFixed(2) + ' mg CO₂e' : r.C_q.toFixed(4) + ' g CO₂e';
+    const fmtW = r.W_q_ml < 1 ? r.W_q_ml.toFixed(3) + ' mL' : r.W_q_ml.toFixed(1) + ' mL';
+
+    document.getElementById('prompt-metrics').innerHTML = `
+        <div class="pm-card pm-energy">
+            <div class="pm-icon">⚡</div>
+            <div class="pm-label">Energy (facility)</div>
+            <div class="pm-value" style="color:var(--energy-color)">${fmtE}</div>
+            <div class="pm-sub">${(r.phoneCharges * 100).toFixed(3)}% of a phone charge</div>
+        </div>
+        <div class="pm-card pm-carbon">
+            <div class="pm-icon">🌿</div>
+            <div class="pm-label">Carbon</div>
+            <div class="pm-value" style="color:var(--carbon-color)">${fmtC}</div>
+            <div class="pm-sub">${r.drivingMeters.toFixed(2)} meters of driving</div>
+        </div>
+        <div class="pm-card pm-water">
+            <div class="pm-icon">💧</div>
+            <div class="pm-label">Water</div>
+            <div class="pm-value" style="color:var(--water-color)">${fmtW}</div>
+            <div class="pm-sub">${r.waterCups.toFixed(4)} cups</div>
+        </div>
+    `;
+
+    // Formula transparency
+    document.getElementById('prompt-formula').innerHTML = `
+        <div><span class="pf-var">E_server</span>   = α_m × β_ℓ × γ_h = ${cfg.alpha_m.toExponential(2)} × ${r.beta_l.toFixed(2)} × 1.0 = <span class="pf-val">${r.E_server.toExponential(3)} kWh</span></div>
+        <div><span class="pf-var">E_facility</span> = E_server × PUE = ${r.E_server.toExponential(3)} × ${PROMPT_INFRA.pue} = <span class="pf-val">${r.E_facility.toExponential(3)} kWh</span></div>
+        <div><span class="pf-var">C_q</span>        = E_facility × I_grid = ${r.E_facility.toExponential(3)} × ${region.carbon} = <span class="pf-val">${r.C_q.toFixed(4)} g CO₂e</span></div>
+        <div><span class="pf-var">W_q</span>        = E_server × ρ_s1 + E_facility × ρ_s2 = ${r.E_server.toExponential(3)} × ${PROMPT_INFRA.rho_s1} + ${r.E_facility.toExponential(3)} × ${PROMPT_INFRA.rho_s2} = <span class="pf-val">${r.W_q_ml.toFixed(3)} mL</span></div>
+        <div style="margin-top:0.5rem;font-size:0.68rem;color:var(--text-muted)">α_m measured via CodeCarbon on Kaggle T4 · β_ℓ from keyword heuristics (R²=0.817) · PUE, ρ_s1, ρ_s2 from Li et al. (2023)</div>
+    `;
+
+    // Attributions
+    const attrEl = document.getElementById('prompt-attr-list');
+    if (!attrs.length) {
+        attrEl.innerHTML = '<p class="attr-empty">No significant phrase-level variation detected. Try a longer prompt with explicit instructions like "in detail" or "with examples".</p>';
+    } else {
+        const maxDelta = Math.max(...attrs.map(a => Math.abs(a.deltaCarbon)));
+        attrEl.innerHTML = attrs.map(a => {
+            const isPos = a.deltaCarbon > 0;
+            const pct = Math.min(100, (Math.abs(a.deltaCarbon) / maxDelta) * 100);
+            const short = a.phrase.length > 55 ? a.phrase.slice(0, 55) + '…' : a.phrase;
+            return `<div class="attr-row">
+                <div style="flex:1">
+                    <span class="attr-phrase">"${short}"</span>
+                    <div class="attr-bar ${isPos ? 'cost-up' : 'cost-down'}" style="width:${pct}%"></div>
+                </div>
+                <span class="attr-delta ${isPos ? 'pos' : 'neg'}">${isPos ? '+' : ''}${a.deltaCarbon.toFixed(4)} g</span>
+            </div>`;
+        }).join('');
+    }
+
+    // Suggestions
+    document.getElementById('prompt-sugg-list').innerHTML = suggs.map(s =>
+        `<div class="sugg-item ${s.savings > 0 ? 'sugg-warn' : 'sugg-ok'}">
+            <span class="sugg-icon">${s.icon}</span>
+            <span>${s.text}${s.savings > 0 ? `<span class="sugg-savings">(~${s.savings}% savings)</span>` : ''}</span>
+        </div>`
+    ).join('');
+
+    // Comparison bars: this prompt vs reference prompts
+    const shortResult = computePromptFootprint('What is 2+2? Answer in one word.', modelKey, regionKey);
+    const longResult = computePromptFootprint('Explain in detail how this works with multiple examples and step by step reasoning and comprehensive analysis.', modelKey, regionKey);
+    const maxCarbon = Math.max(r.C_q, shortResult.C_q, longResult.C_q) * 1.1;
+
+    document.getElementById('prompt-comparison-bars').innerHTML = [
+        { label: 'Short prompt', val: shortResult.C_q, color: '#16a34a' },
+        { label: 'Your prompt', val: r.C_q, color: '#2563eb' },
+        { label: 'Very long prompt', val: longResult.C_q, color: '#dc2626' },
+    ].map(item => {
+        const pct = Math.max(2, (item.val / maxCarbon) * 100);
+        return `<div class="comp-row">
+            <span class="comp-label">${item.label}</span>
+            <div class="comp-bar-bg">
+                <div class="comp-bar-fill" style="width:${pct}%;background:${item.color}">
+                    <span>${item.val.toFixed(4)}g</span>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Scroll to results
+    document.getElementById('prompt-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
