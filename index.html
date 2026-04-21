@@ -253,6 +253,75 @@
                 </div>
             </div>
 
+            <!-- ===== PROMPT ANALYSIS (Novel Feature) ===== -->
+            <section class="prompt-section" aria-labelledby="prompt-heading">
+                <div class="section-header">
+                    <h2 id="prompt-heading">🔍 Prompt-Level Analysis</h2>
+                    <p>Type a real prompt to see its footprint — powered by our <strong>empirically measured</strong> coefficients (α_m from CodeCarbon on Kaggle T4)</p>
+                </div>
+
+                <div class="prompt-card glass-card">
+                    <div class="prompt-input-area">
+                        <label for="user-prompt" class="prompt-label">Your Prompt</label>
+                        <textarea id="user-prompt" rows="4" placeholder="e.g. Explain in detail how photosynthesis works, with multiple examples and step by step reasoning."></textarea>
+                        <div class="prompt-controls">
+                            <div class="prompt-model-select">
+                                <label for="prompt-model" class="control-label">Measured Model</label>
+                                <select id="prompt-model" class="prompt-select">
+                                    <option value="flan-t5-base">Flan-T5 Base (250M, Seq2Seq) — α_m = 6.4e-5 kWh</option>
+                                    <option value="qwen-0.5b" selected>Qwen 2.5 0.5B (Decoder-only) — α_m = 1.83e-4 kWh</option>
+                                </select>
+                            </div>
+                            <div class="prompt-region-select">
+                                <label for="prompt-region" class="control-label">Region</label>
+                                <select id="prompt-region" class="prompt-select">
+                                    <option value="renewable">🌿 Renewable (100 gCO₂/kWh)</option>
+                                    <option value="eu">🇪🇺 EU (275 gCO₂/kWh)</option>
+                                    <option value="us">🇺🇸 US (440 gCO₂/kWh)</option>
+                                    <option value="india" selected>🇮🇳 India (675 gCO₂/kWh)</option>
+                                    <option value="coal">⚫ Coal-heavy (800 gCO₂/kWh)</option>
+                                </select>
+                            </div>
+                            <button class="btn-analyze" onclick="analyzePrompt()">
+                                <span class="btn-icon">⚡</span> Analyze Footprint
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Results (hidden until analysis) -->
+                    <div id="prompt-results" class="prompt-results hidden">
+
+                        <!-- Detection badges -->
+                        <div class="prompt-badges" id="prompt-badges"></div>
+
+                        <!-- Metrics row -->
+                        <div class="prompt-metrics" id="prompt-metrics"></div>
+
+                        <!-- Formula transparency -->
+                        <div class="prompt-formula" id="prompt-formula"></div>
+
+                        <!-- Phrase attribution -->
+                        <div class="prompt-attribution">
+                            <h4>📊 Phrase-Level Attribution</h4>
+                            <p class="attr-sub">Which parts of your prompt drive the footprint? (computed via ablation — removing each phrase and measuring the delta)</p>
+                            <div id="prompt-attr-list"></div>
+                        </div>
+
+                        <!-- Suggestions -->
+                        <div class="prompt-suggestions">
+                            <h4>💡 Suggestions to Reduce Footprint</h4>
+                            <div id="prompt-sugg-list"></div>
+                        </div>
+
+                        <!-- Comparison bar -->
+                        <div class="prompt-comparison">
+                            <h4>📏 How does this compare?</h4>
+                            <div id="prompt-comparison-bars"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- ===== WHAT THIS ACTUALLY MEANS — the emotional core ===== -->
             <section class="equivalents-section" aria-labelledby="equiv-heading">
                 <div class="section-header">
