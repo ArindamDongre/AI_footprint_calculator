@@ -899,14 +899,14 @@ function analyzePrompt() {
         { label: 'Your prompt', val: r.C_q, color: '#2563eb' },
         { label: 'Very long prompt', val: longResult.C_q, color: '#dc2626' },
     ].map(item => {
-        const pct = Math.max(2, (item.val / maxCarbon) * 100);
+        // Reduced minimum width to 1% for better accuracy
+        const pct = Math.max(1, (item.val / maxCarbon) * 100);
         return `<div class="comp-row">
             <span class="comp-label">${item.label}</span>
             <div class="comp-bar-bg">
-                <div class="comp-bar-fill" style="width:${pct}%;background:${item.color}">
-                    <span>${item.val.toFixed(4)}g</span>
-                </div>
+                <div class="comp-bar-fill" style="width:${pct}%;background:${item.color}"></div>
             </div>
+            <span class="comp-val-text">${item.val.toFixed(4)}g</span>
         </div>`;
     }).join('');
 
