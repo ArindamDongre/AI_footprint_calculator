@@ -3,73 +3,61 @@
  * Estimation engine, Chart.js visualizations, UI interactions
  *
  * Methodology:
- *   E_q (facility) = α_m × β_l × γ_h × PUE          [kWh/query]
- *   C_q            = E_q × I_grid                     [gCO₂e/query]
- *   W_q            = E_q × (WUE_onsite + EWIF) × 1000 [mL/query]
+ *   E_facility = α_m × β_l × γ_h × PUE               [kWh/query]
+ *   C_q        = E_facility × I_grid                   [gCO₂e/query]
+ *   W_q        = E_facility × (WUE + EWIF) × 1000     [mL/query]
  *
- * Sources: Luccioni et al. (2023), Ren et al. (2023), Dodge et al. (2022), IEA 2023
+ * Sources (12+ peer-reviewed & official):
+ *   [1] Luccioni, Jernite & Strubell (2023/2024) — "Power Hungry Processing" (ACM FAccT)
+ *   [2] Li, Yang, Islam & Ren (2023) — "Making AI Less Thirsty" (arXiv:2304.03271)
+ *   [3] Dodge et al. (2022) — "Measuring Carbon Intensity of AI" (ACM FAccT)
+ *   [4] Patterson et al. (2021) — "Carbon Emissions of Large NNs" (arXiv:2104.10350)
+ *   [5] Patterson et al. (2022) — "ML Carbon Footprint Will Plateau" (IEEE Computer)
+ *   [6] IEA (2025/2026) — Data Centre Energy Demand Report
+ *   [7] Google (Aug 2025) — Gemini energy disclosure: median text = 0.24 Wh
+ *   [8] OpenAI / Sam Altman (Jun 2025) — ChatGPT energy: avg = 0.34 Wh
+ *   [9] Epoch AI (2025) — Inference energy analysis: median ~0.3 Wh
+ *   [10] Uptime Institute (2025) — Global PUE survey: avg = 1.56
+ *   [11] CEA India (FY2024-25) — CO₂ Baseline: 710 gCO₂/MWh
+ *   [12] Ember (2025) — Global Electricity Review: EU 213, US 384 gCO₂/kWh
+ *   [13] EcoLogits (2024) — Bottom-up LCA methodology for GenAI inference
  */
 
 'use strict';
 
-/* ================================================================
-   1. PARAMETER TABLES (literature-calibrated)
-   ================================================================ */
+/* ──────────── CALIBRATION PARAMETERS ──────────── */
 
 const PARAMS = {
-    /** Base server-side energy per query (kWh) by model class
-     *  Source: Luccioni et al. (2023), SemiAnalysis estimates */
     models: {
-        small:  { name: 'Small LLM (<7B)',    energy: { min: 0.0001, avg: 0.0005, max: 0.001  } },
-        medium: { name: 'Medium LLM (7–70B)', energy: { min: 0.001,  avg: 0.003,  max: 0.005  } },
-        large:  { name: 'Large LLM (>70B)',   energy: { min: 0.005,  avg: 0.010,  max: 0.020  } },
-        image:  { name: 'Image Generation',   energy: { min: 0.010,  avg: 0.040,  max: 0.100  } },
+        small:  { name: 'Small LLM (<7B)',    energy: { min: 0.0001,  avg: 0.00024, max: 0.0005  } },
+        medium: { name: 'Medium LLM (7–70B)', energy: { min: 0.0003,  avg: 0.0007,  max: 0.002   } },
+        large:  { name: 'Large LLM (>70B)',   energy: { min: 0.001,   avg: 0.003,   max: 0.010   } },
+        image:  { name: 'Image Generation',   energy: { min: 0.003,   avg: 0.015,   max: 0.050   } },
     },
-
-    /** Prompt-length scaling factor (β_l)
-     *  Approximated from token count vs. FLOPs literature */
     promptLength: {
         short:    { label: 'Short (<50 tokens)',        factor: 0.70 },
         medium:   { label: 'Medium (50–200 tokens)',    factor: 1.00 },
         long:     { label: 'Long (200–500 tokens)',     factor: 1.50 },
-        verylong: { label: 'Very Long (500+ tokens)',   factor: 2.20 },
+        verylong: { label: 'Very Long (500+ tokens)',   factor: 2.50 },
     },
-
-    /** Hardware efficiency factor (γ_h)
-     *  Based on relative FLOPS/W across GPU generations */
     hardware: {
-        efficient: { label: 'Modern/Efficient', factor: 0.80 },
+        efficient: { label: 'Modern/Efficient', factor: 0.70 },
         average:   { label: 'Average',          factor: 1.00 },
-        older:     { label: 'Older Hardware',   factor: 1.30 },
+        older:     { label: 'Older Hardware',   factor: 1.40 },
     },
-
-    /** Grid carbon intensity (gCO₂e/kWh) by region
-     *  Source: Dodge et al. (2022), ElectricityMaps, IEA */
     regions: {
-        renewable: { name: 'Renewable-heavy', carbon: { min: 50,  avg: 100, max: 150 } },
-        eu:        { name: 'EU Average',      carbon: { min: 200, avg: 275, max: 350 } },
-        us:        { name: 'US Average',      carbon: { min: 380, avg: 440, max: 500 } },
-        india:     { name: 'India',           carbon: { min: 600, avg: 675, max: 750 } },
-        coal:      { name: 'Coal-heavy',      carbon: { min: 700, avg: 800, max: 900 } },
+        renewable: { name: 'Renewable-heavy', carbon: { min: 20,  avg: 50,  max: 100 } },
+        eu:        { name: 'EU Average',      carbon: { min: 150, avg: 213, max: 300 } },
+        us:        { name: 'US Average',      carbon: { min: 300, avg: 384, max: 450 } },
+        india:     { name: 'India',           carbon: { min: 650, avg: 710, max: 800 } },
+        coal:      { name: 'Coal-heavy',      carbon: { min: 750, avg: 850, max: 950 } },
     },
-
-    /** Power Usage Effectiveness (PUE) — data-center overhead
-     *  Source: IEA Electricity 2023 */
-    pue: { min: 1.10, avg: 1.30, max: 1.60 },
-
-    /** Water usage factors (L/kWh)
-     *  onsite: direct cooling water (WUE)
-     *  ewif:   electricity-withdrawal intensity factor (indirect)
-     *  Source: Ren et al. (2023) */
+    pue: { min: 1.10, avg: 1.30, max: 1.58 },
     water: {
-        onsite: { min: 0.00, avg: 0.55, max: 2.00 },
-        ewif:   { min: 1.30, avg: 3.10, max: 6.00 },
+        onsite: { min: 0.00, avg: 0.50, max: 1.80 },
+        ewif:   { min: 1.00, avg: 2.80, max: 5.50 },
     },
 };
-
-/* ================================================================
-   2. CASE STUDY PROFILES
-   ================================================================ */
 
 const CASE_STUDIES = {
     student: {
@@ -77,7 +65,7 @@ const CASE_STUDIES = {
         prompt: 'medium', hw: 'average', region: 'india',
     },
     pro: {
-        label: 'Professional', queries: 250, model: 'large',
+        label: 'Professional', queries: 200, model: 'large',
         prompt: 'long', hw: 'average', region: 'us',
     },
     heavy: {
@@ -86,451 +74,569 @@ const CASE_STUDIES = {
     },
 };
 
-/* ================================================================
-   3. CALCULATION ENGINE
-   ================================================================ */
+/* Awareness facts that rotate in the "Did you know?" callout */
+const AWARENESS_FACTS = [
+    "A single image generation query uses as much energy as charging your smartphone <strong>1.5 times</strong>. Text queries use up to 60× less energy.",
+    "Data centers globally consumed <strong>415 TWh</strong> in 2024 — more than many entire countries. AI is the fastest-growing segment.",
+    "Choosing a provider on a renewable grid can reduce your carbon footprint by <strong>14×</strong> compared to a coal-heavy grid.",
+    "Google's AI efficiency improved <strong>33× in 12 months</strong> (2024→2025). The same query today costs a fraction of what it did a year ago.",
+    "A ChatGPT query uses <strong>~0.34 Wh</strong> — about the same as keeping an LED bulb on for 2 minutes.",
+    "Very long reasoning prompts (chain-of-thought) can use <strong>10–70× more tokens</strong> internally than the visible output.",
+    "The average global PUE for data centers has been stuck at <strong>~1.56 for 6 years</strong> — only hyperscalers like Google achieve ~1.09.",
+    "India's power grid emits <strong>710 gCO₂/kWh</strong> (FY2024-25), making AI usage in India particularly carbon-intensive.",
+];
 
-/**
- * Returns per-query and cumulative metrics with uncertainty ranges.
- * @param {string} model       - model key
- * @param {number} queriesPerDay
- * @param {string} prompt      - prompt length key
- * @param {string} hardware    - hardware key
- * @param {string} region      - region key
- * @returns {{ perQuery, cumulative }}
- */
-function calculate(model, queriesPerDay, prompt, hardware, region) {
-    const m = PARAMS.models[model];
-    const β = PARAMS.promptLength[prompt].factor;
-    const γ = PARAMS.hardware[hardware].factor;
-    const R = PARAMS.regions[region];
-    const P = PARAMS.pue;
-    const W = PARAMS.water;
+/* ──────────── STATE ──────────── */
 
-    // Helper: multiply a {min,avg,max} object by a scalar
-    const mul = (obj, k) => ({ min: obj.min * k, avg: obj.avg * k, max: obj.max * k });
+let timeHorizon = 'monthly';
+let charts = {};
+let currentFactIndex = 0;
 
-    // Server-side energy per query (kWh)
-    const serverE = mul(m.energy, β * γ);
+/* ──────────── CORE CALCULATION ──────────── */
 
-    // Facility energy (scale by PUE — each endpoint of uncertainty independently)
-    const facilityE = {
-        min: serverE.min * P.min,
-        avg: serverE.avg * P.avg,
-        max: serverE.max * P.max,
-    };
+function calculate(modelKey, queries, promptKey, hwKey, regionKey) {
+    const m = PARAMS.models[modelKey];
+    const β = PARAMS.promptLength[promptKey].factor;
+    const γ = PARAMS.hardware[hwKey].factor;
+    const r = PARAMS.regions[regionKey];
 
-    // Carbon per query (gCO₂e)
-    const carbon = {
-        min: facilityE.min * R.carbon.min,
-        avg: facilityE.avg * R.carbon.avg,
-        max: facilityE.max * R.carbon.max,
-    };
-
-    // Water per query (mL) = facilityE [kWh] × total_water_factor [L/kWh] × 1000
-    const waterFactor = {
-        min: (W.onsite.min + W.ewif.min) * 1000,
-        avg: (W.onsite.avg + W.ewif.avg) * 1000,
-        max: (W.onsite.max + W.ewif.max) * 1000,
-    };
-    const water = mul(waterFactor, 1);  // structure ready
-    water.min = facilityE.min * waterFactor.min;
-    water.avg = facilityE.avg * waterFactor.avg;
-    water.max = facilityE.max * waterFactor.max;
+    // Per-query calculations (min/avg/max)
+    const perQuery = {};
+    ['min', 'avg', 'max'].forEach(level => {
+        const pueLevel = level;
+        const eServer  = m.energy[level] * β * γ;
+        const eFacility = eServer * PARAMS.pue[pueLevel];
+        const carbon   = eFacility * r.carbon[level];
+        const waterL   = eFacility * (PARAMS.water.onsite[level] + PARAMS.water.ewif[level]);
+        const waterML  = waterL * 1000;
+        perQuery[level] = { energy: eFacility, carbon, water: waterML, waterL };
+    });
 
     // Cumulative projections
-    const periods = { daily: queriesPerDay, monthly: queriesPerDay * 30, yearly: queriesPerDay * 365 };
     const cumulative = {};
-    for (const [period, mult] of Object.entries(periods)) {
-        cumulative[period] = {
-            energy: mul(facilityE, mult),
-            carbon: mul(carbon,    mult),
-            // water in Litres for cumulative
-            water: { min: water.min * mult / 1000, avg: water.avg * mult / 1000, max: water.max * mult / 1000 },
-        };
+    const periods = { daily: 1, monthly: 30, yearly: 365 };
+    Object.entries(periods).forEach(([period, days]) => {
+        cumulative[period] = {};
+        ['min', 'avg', 'max'].forEach(level => {
+            const n = queries * days;
+            cumulative[period][level] = {
+                energy: perQuery[level].energy * n,
+                carbon: perQuery[level].carbon * n,
+                water:  perQuery[level].waterL * n,  // in litres
+            };
+        });
+    });
+
+    // Monthly projection (12 months)
+    const monthly = [];
+    for (let i = 1; i <= 12; i++) {
+        monthly.push({
+            min: perQuery.min.carbon * queries * 30 * i,
+            avg: perQuery.avg.carbon * queries * 30 * i,
+            max: perQuery.max.carbon * queries * 30 * i,
+        });
     }
 
-    return { perQuery: { energy: facilityE, carbon, water }, cumulative };
+    return { perQuery, cumulative, monthly };
 }
 
-/* ================================================================
-   4. SMART FORMATTING
-   ================================================================ */
+/* ──────────── FORMATTING ──────────── */
 
-function fmt(val) {
-    if (val == null || isNaN(val)) return '—';
-    if (val === 0)    return '0';
-    if (val < 0.0001) return val.toExponential(2);
-    if (val < 0.001)  return val.toFixed(6);
-    if (val < 0.1)    return val.toFixed(4);
-    if (val < 10)     return val.toFixed(3);
-    if (val < 1000)   return val.toFixed(1);
-    if (val < 1e6)    return (val / 1000).toFixed(2) + 'k';
-    return (val / 1e6).toFixed(2) + 'M';
+function fmt(value) {
+    if (value === 0) return '0';
+    if (Math.abs(value) >= 10000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    if (Math.abs(value) >= 100)   return value.toFixed(1);
+    if (Math.abs(value) >= 1)     return value.toFixed(2);
+    if (Math.abs(value) >= 0.01)  return value.toFixed(3);
+    if (Math.abs(value) >= 0.001) return value.toFixed(4);
+    return value.toExponential(2);
+}
+function fmtRange(val) {
+    if (Math.abs(val) >= 100) return val.toFixed(0);
+    if (Math.abs(val) >= 1) return val.toFixed(1);
+    return val.toFixed(2);
 }
 
-function fmtRange(val, decimals) {
-    if (val == null || isNaN(val)) return '—';
-    if (val < 0.0001) return val.toExponential(2);
-    if (val < 0.01)   return val.toFixed(5);
-    if (val < 1)      return val.toFixed(4);
-    if (val < 100)    return val.toFixed(2);
-    return val.toFixed(1);
+/* ──────────── SEVERITY ──────────── */
+
+function getSeverity(carbonPerQuery) {
+    if (carbonPerQuery < 0.5) return 'low';
+    if (carbonPerQuery < 5)   return 'med';
+    return 'high';
 }
 
-/* ================================================================
-   5. CHART INSTANCES
-   ================================================================ */
-
-let charts = {};
-let currentResults = null;
-let timeHorizon = 'monthly';
-
-/** Shared Chart.js default overrides */
-function applyChartDefaults() {
-    Chart.defaults.color              = '#4a7c59';
-    Chart.defaults.borderColor        = 'rgba(74,222,128,0.08)';
-    Chart.defaults.font.family        = "'Inter', sans-serif";
-    Chart.defaults.font.size          = 11;
-    Chart.defaults.plugins.legend.labels.boxWidth = 12;
+function getSeverityPercent(value, metricType) {
+    // Returns 0-100 based on where value falls in the possible range
+    const ranges = {
+        energy: { min: 0.00007, max: 0.2 },  // kWh
+        carbon: { min: 0.001,   max: 100 },    // gCO₂e
+        water:  { min: 0.07,    max: 500 },    // mL
+    };
+    const r = ranges[metricType];
+    const logVal = Math.log10(Math.max(value, r.min));
+    const logMin = Math.log10(r.min);
+    const logMax = Math.log10(r.max);
+    return Math.min(100, Math.max(5, ((logVal - logMin) / (logMax - logMin)) * 100));
 }
 
-function initCharts() {
-    applyChartDefaults();
+/* ──────────── IMPACT STATEMENT GENERATOR ──────────── */
 
-    /* --- 1. Relative Impact Bar Chart --- */
-    charts.metrics = new Chart(document.getElementById('metricsChart'), {
-        type: 'bar',
-        data: {
-            labels: ['⚡ Energy', '💨 Carbon', '💧 Water'],
-            datasets: [
-                {
-                    label: 'Min', data: [0, 0, 0], borderRadius: 5, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.25)',
-                },
-                {
-                    label: 'Avg', data: [0, 0, 0], borderRadius: 5, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.65)',
-                },
-                {
-                    label: 'Max', data: [0, 0, 0], borderRadius: 5, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.95)',
-                },
-            ],
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: {
-                legend:  { labels: { color: '#86efac', padding: 14 } },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}% of worst-case`,
-                    },
-                },
-            },
-            scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a7c59', font: { size: 12, weight: '600' } } },
-                y: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => v + '%' },
-                    title: { display: true, text: '% of worst-case scenario', color: '#4a7c59', font: { size: 10 } },
-                },
-            },
-        },
-    });
+function generateImpactStatement(results) {
+    const carbon = results.perQuery.avg.carbon;
+    const energy = results.perQuery.avg.energy;
+    const severity = getSeverity(carbon);
 
-    /* --- 2. Cumulative Carbon Line Chart --- */
-    const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    charts.cumulative = new Chart(document.getElementById('cumulativeChart'), {
-        type: 'line',
-        data: {
-            labels: monthLabels,
-            datasets: [
-                {
-                    label: 'Min', tension: 0.4, borderWidth: 1.5,
-                    borderColor: 'rgba(74,222,128,0.35)',
-                    backgroundColor: 'rgba(74,222,128,0.04)',
-                    fill: '+1', pointRadius: 2, pointHoverRadius: 5,
-                    data: new Array(12).fill(0),
-                },
-                {
-                    label: 'Avg', tension: 0.4, borderWidth: 2.5,
-                    borderColor: '#4ade80',
-                    backgroundColor: 'rgba(74,222,128,0.10)',
-                    fill: false, pointRadius: 3, pointHoverRadius: 7,
-                    data: new Array(12).fill(0),
-                },
-                {
-                    label: 'Max', tension: 0.4, borderWidth: 1.5,
-                    borderColor: 'rgba(74,222,128,0.35)',
-                    backgroundColor: 'rgba(74,222,128,0.04)',
-                    fill: '-1', pointRadius: 2, pointHoverRadius: 5,
-                    data: new Array(12).fill(0),
-                },
-            ],
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { labels: { color: '#86efac', padding: 14 } },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)} gCO₂e`,
-                    },
-                },
-            },
-            scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a7c59' } },
-                y: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => fmt(v) },
-                    title: { display: true, text: 'Cumulative gCO₂e', color: '#4a7c59', font: { size: 10 } },
-                },
-            },
-        },
-    });
+    // Update carbon value with severity coloring
+    const el = document.getElementById('impact-carbon-val');
+    el.textContent = fmt(carbon);
+    el.className = 'impact-carbon severity-' + severity;
 
-    /* --- 3. Sensitivity Horizontal Bar Chart --- */
-    charts.sensitivity = new Chart(document.getElementById('sensitivityChart'), {
-        type: 'bar',
-        data: {
-            labels: ['Model Type', 'Grid / Region', 'Prompt Length', 'PUE Range', 'Hardware'],
-            datasets: [{
-                label: 'Range of possible carbon values (%)',
-                data: [0, 0, 0, 0, 0],
-                borderRadius: 5, borderWidth: 0,
-                backgroundColor: [
-                    'rgba(248,113,113,0.75)',
-                    'rgba(74,222,128,0.75)',
-                    'rgba(251,146,60,0.75)',
-                    'rgba(96,165,250,0.75)',
-                    'rgba(250,204,21,0.75)',
-                ],
-            }],
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true, maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => ` ±${ctx.raw.toFixed(1)}% relative spread in carbon estimate`,
-                    },
-                },
-            },
-            scales: {
-                x: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => v + '%' },
-                    title: { display: true, text: 'Relative spread in avg carbon estimate (%)', color: '#4a7c59', font: { size: 10 } },
-                },
-                y: { grid: { display: false }, ticks: { color: '#86efac', font: { size: 11 } } },
-            },
-        },
-    });
+    // Generate relatable equivalent
+    const carMeters = (carbon / 192) * 1000; // gCO₂ / (gCO₂/km) * 1000 = meters
+    const phoneCharges = energy / 0.01;
+    const ledMinutes = (energy * 1000 / 10) * 60; // kWh -> Wh / 10W * 60min
 
-    /* --- 4. Case Study Comparison Bar Chart --- */
-    charts.caseStudy = new Chart(document.getElementById('caseStudyChart'), {
-        type: 'bar',
-        data: {
-            labels: ['🎓 Student', '💼 Professional', '🔬 Researcher'],
-            datasets: [
-                {
-                    label: 'Min (gCO₂e/month)', data: [0,0,0], borderRadius: 6, borderWidth: 0,
-                    backgroundColor: 'rgba(74,222,128,0.35)',
-                },
-                {
-                    label: 'Avg (gCO₂e/month)', data: [0,0,0], borderRadius: 6, borderWidth: 0,
-                    backgroundColor: 'rgba(45,212,191,0.70)',
-                },
-                {
-                    label: 'Max (gCO₂e/month)', data: [0,0,0], borderRadius: 6, borderWidth: 0,
-                    backgroundColor: 'rgba(251,146,60,0.70)',
-                },
-            ],
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: {
-                legend: { labels: { color: '#86efac', padding: 14 } },
-                tooltip: {
-                    callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)} gCO₂e/mo` },
-                },
-            },
-            scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a7c59', font: { size: 12 } } },
-                y: {
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                    ticks: { color: '#4a7c59', callback: v => fmt(v) },
-                    title: { display: true, text: 'gCO₂e / month', color: '#4a7c59', font: { size: 10 } },
-                },
-            },
-        },
+    let equivText = '';
+    if (carMeters >= 1000) {
+        equivText = `driving ${fmt(carMeters / 1000)} km by car`;
+    } else if (carMeters >= 1) {
+        equivText = `driving ${Math.round(carMeters)} meters by car`;
+    } else if (ledMinutes >= 1) {
+        equivText = `keeping an LED bulb on for ${fmtRange(ledMinutes)} minutes`;
+    } else {
+        equivText = `${fmtRange(phoneCharges * 100)}% of a smartphone charge`;
+    }
+
+    document.getElementById('impact-equiv-text').textContent = equivText;
+    document.getElementById('impact-range').textContent =
+        `Range: ${fmt(results.perQuery.min.carbon)} – ${fmt(results.perQuery.max.carbon)} gCO₂e`;
+}
+
+/* ──────────── UI UPDATES ──────────── */
+
+function updateMetricCards(results) {
+    const pq = results.perQuery;
+    const severity = getSeverity(pq.avg.carbon);
+
+    // Energy card
+    document.getElementById('energy-avg').textContent = fmt(pq.avg.energy);
+    document.getElementById('energy-min').textContent = fmt(pq.min.energy);
+    document.getElementById('energy-max').textContent = fmt(pq.max.energy);
+    const energyBar = document.getElementById('energy-bar');
+    energyBar.style.width = getSeverityPercent(pq.avg.energy, 'energy') + '%';
+    energyBar.className = 'severity-fill sev-' + severity;
+
+    // Carbon card
+    document.getElementById('carbon-avg').textContent = fmt(pq.avg.carbon);
+    document.getElementById('carbon-min').textContent = fmt(pq.min.carbon);
+    document.getElementById('carbon-max').textContent = fmt(pq.max.carbon);
+    const carbonBar = document.getElementById('carbon-bar');
+    carbonBar.style.width = getSeverityPercent(pq.avg.carbon, 'carbon') + '%';
+    carbonBar.className = 'severity-fill sev-' + severity;
+
+    // Water card
+    document.getElementById('water-avg').textContent = fmt(pq.avg.water);
+    document.getElementById('water-min').textContent = fmt(pq.min.water);
+    document.getElementById('water-max').textContent = fmt(pq.max.water);
+    const waterBar = document.getElementById('water-bar');
+    waterBar.style.width = getSeverityPercent(pq.avg.water, 'water') + '%';
+    waterBar.className = 'severity-fill sev-' + severity;
+
+    // Pop animation
+    document.querySelectorAll('.metric-avg').forEach(el => {
+        el.classList.remove('pop');
+        void el.offsetWidth; // trigger reflow
+        el.classList.add('pop');
     });
 }
 
-/* ================================================================
-   6. UI UPDATE FUNCTIONS
-   ================================================================ */
-
-function animatePop(el) {
-    el.classList.remove('pop');
-    void el.offsetWidth;   // force reflow
-    el.classList.add('pop');
-}
-
-function updateMetricCard(ids, val, maxVal) {
-    const { avgId, minId, maxId, barId } = ids;
-    const avgEl = document.getElementById(avgId);
-    avgEl.textContent = fmt(val.avg);
-    document.getElementById(minId).textContent = fmtRange(val.min);
-    document.getElementById(maxId).textContent = fmtRange(val.max);
-    animatePop(avgEl);
-
-    const pct = Math.min(100, (val.avg / maxVal) * 100);
-    document.getElementById(barId).style.width = pct + '%';
-}
-
-function updateCumulativePanel(results) {
+function updateCumulative(results) {
     const cumul = results.cumulative[timeHorizon];
-    const label = timeHorizon.charAt(0).toUpperCase() + timeHorizon.slice(1);
-    document.getElementById('period-label').textContent = label;
-    document.getElementById('cumul-energy').textContent = fmt(cumul.energy.avg);
-    document.getElementById('cumul-carbon').textContent = fmt(cumul.carbon.avg);
-    document.getElementById('cumul-water').textContent  = fmt(cumul.water.avg);
-    document.getElementById('equiv-period').textContent = timeHorizon;
+    document.getElementById('cumul-energy').textContent = fmt(cumul.avg.energy);
+    document.getElementById('cumul-carbon').textContent = fmt(cumul.avg.carbon);
+    document.getElementById('cumul-water').textContent = fmt(cumul.avg.water);
+    document.getElementById('period-label').textContent =
+        { daily: 'Daily', monthly: 'Monthly', yearly: 'Yearly' }[timeHorizon];
 }
 
 function updateEquivalents(results) {
     const cumul = results.cumulative[timeHorizon];
+    const periodName = { daily: 'daily', monthly: 'monthly', yearly: 'yearly' }[timeHorizon];
+    const equivPeriodEl = document.getElementById('equiv-period');
+    if (equivPeriodEl) equivPeriodEl.textContent = periodName;
 
-    // Phone charges: energy / 0.01 kWh
-    const phones = Math.round(cumul.energy.avg / 0.01);
+    // Phone charges
+    const phones = Math.round(cumul.avg.energy / 0.01);
     document.getElementById('eq-phone').textContent = phones.toLocaleString();
 
-    // Car km: carbon / 192 gCO₂e per km
-    const carKm = (cumul.carbon.avg / 192);
+    // Car km
+    const carKm = cumul.avg.carbon / 192;
     document.getElementById('eq-car').textContent = fmt(carKm);
 
-    // Water bottles (500 mL): cumul water in Litres / 0.5
-    const bottles = Math.round(cumul.water.avg / 0.5);
+    // Water bottles
+    const bottles = Math.round(cumul.avg.water / 0.5);
     document.getElementById('eq-water').textContent = bottles.toLocaleString();
 
-    // Trees needed to offset (yearly): yearlyCarbon / 21000 gCO₂ per tree per year
-    const yearlyCarbon = results.cumulative.yearly.carbon.avg;
-    const trees = (yearlyCarbon / 21000);
-    document.getElementById('eq-tree').textContent = trees < 0.001 ? trees.toExponential(2) : fmtRange(trees);
+    // Trees (yearly)
+    const yearlyCarbon = results.cumulative.yearly.avg.carbon;
+    const trees = yearlyCarbon / 21000;
+    document.getElementById('eq-tree').textContent = trees < 0.01 ? trees.toExponential(2) : fmtRange(trees);
 
-    // Household electricity % (yearly): yearlyEnergy / 3500 kWh × 100
-    const yearlyEnergy = results.cumulative.yearly.energy.avg;
+    // Google searches
+    const searches = Math.round(cumul.avg.energy / 0.0003);
+    document.getElementById('eq-search').textContent = searches.toLocaleString();
+
+    // Household %
+    const yearlyEnergy = results.cumulative.yearly.avg.energy;
     const housePct = (yearlyEnergy / 3500) * 100;
     document.getElementById('eq-house').textContent = housePct < 0.01
         ? housePct.toExponential(2) + '%'
         : fmtRange(housePct) + '%';
 }
 
-function updateMetricsChart(results) {
-    // Worst-case maximums for normalization
-    const worstE = PARAMS.models.image.energy.max * PARAMS.promptLength.verylong.factor * PARAMS.hardware.older.factor * PARAMS.pue.max;
-    const worstC = worstE * PARAMS.regions.coal.carbon.max;
-    const worstW = worstE * (PARAMS.water.onsite.max + PARAMS.water.ewif.max) * 1000;
+/* ──────────── CHARTS ──────────── */
 
-    const pq = results.perQuery;
-    const pct = (v, w) => Math.min(100, (v / w) * 100);
+const chartFont = { family: "'Inter', sans-serif", size: 11, weight: '500' };
+const chartFontSmall = { ...chartFont, size: 10 };
+const gridColor = 'rgba(74, 222, 128, 0.07)';
+const tickColor = '#4a7c59';
 
-    charts.metrics.data.datasets[0].data = [pct(pq.energy.min, worstE), pct(pq.carbon.min, worstC), pct(pq.water.min, worstW)];
-    charts.metrics.data.datasets[1].data = [pct(pq.energy.avg, worstE), pct(pq.carbon.avg, worstC), pct(pq.water.avg, worstW)];
-    charts.metrics.data.datasets[2].data = [pct(pq.energy.max, worstE), pct(pq.carbon.max, worstC), pct(pq.water.max, worstW)];
-    charts.metrics.update('active');
-}
+function buildComparisonChart(results) {
+    const ctx = document.getElementById('comparisonChart');
+    if (!ctx) return;
 
-function updateCumulativeChart(results, queriesPerDay) {
-    const minPerMonth  = results.perQuery.carbon.min * queriesPerDay * 30;
-    const avgPerMonth  = results.perQuery.carbon.avg * queriesPerDay * 30;
-    const maxPerMonth  = results.perQuery.carbon.max * queriesPerDay * 30;
+    const cumul = results.cumulative[timeHorizon];
+    const phones = Math.round(cumul.avg.energy / 0.01);
+    const searches = Math.round(cumul.avg.energy / 0.0003);
+    const carKm = cumul.avg.carbon / 192;
+    const bottles = Math.round(cumul.avg.water / 0.5);
 
-    charts.cumulative.data.datasets[0].data = Array.from({ length: 12 }, (_, i) => minPerMonth * (i + 1));
-    charts.cumulative.data.datasets[1].data = Array.from({ length: 12 }, (_, i) => avgPerMonth * (i + 1));
-    charts.cumulative.data.datasets[2].data = Array.from({ length: 12 }, (_, i) => maxPerMonth * (i + 1));
-    charts.cumulative.update('active');
-}
-
-function updateSensitivityChart(model, prompt, hw, region, queries) {
-    const base = calculate(model, queries, prompt, hw, region).perQuery.carbon.avg;
-    if (!base || base === 0) return;
-
-    const spread = (keys, fn) => {
-        const vals = keys.map(fn);
-        return ((Math.max(...vals) - Math.min(...vals)) / base) * 100;
+    const data = {
+        labels: ['📱 Phone charges', '🔍 Google searches', '🚗 km driven', '💧 Water bottles'],
+        datasets: [{
+            data: [phones, searches, carKm, bottles],
+            backgroundColor: [
+                'rgba(250, 204, 21, 0.65)',
+                'rgba(96, 165, 250, 0.65)',
+                'rgba(248, 113, 113, 0.65)',
+                'rgba(45, 212, 191, 0.65)',
+            ],
+            borderColor: [
+                'rgba(250, 204, 21, 1)',
+                'rgba(96, 165, 250, 1)',
+                'rgba(248, 113, 113, 1)',
+                'rgba(45, 212, 191, 1)',
+            ],
+            borderWidth: 1.5,
+            borderRadius: 6,
+        }],
     };
 
-    const modelSpread  = spread(['small','medium','large','image'],         k => calculate(k,     queries, prompt, hw,     region).perQuery.carbon.avg);
-    const regionSpread = spread(['renewable','eu','us','india','coal'],      k => calculate(model, queries, prompt, hw,     k     ).perQuery.carbon.avg);
-    const promptSpread = spread(['short','medium','long','verylong'],        k => calculate(model, queries, k,      hw,     region).perQuery.carbon.avg);
-    const hwSpread     = spread(['efficient','average','older'],             k => calculate(model, queries, prompt, k,      region).perQuery.carbon.avg);
+    if (charts.comparison) {
+        charts.comparison.data = data;
+        charts.comparison.update('none');
+        return;
+    }
 
-    // PUE spread: manual (fix all, vary only PUE)
-    const serverE     = PARAMS.models[model].energy.avg * PARAMS.promptLength[prompt].factor * PARAMS.hardware[hw].factor;
-    const pueSpread   = ((serverE * PARAMS.pue.max - serverE * PARAMS.pue.min) * PARAMS.regions[region].carbon.avg / base) * 100;
-
-    charts.sensitivity.data.datasets[0].data = [
-        Math.min(modelSpread,  999),
-        Math.min(regionSpread, 999),
-        Math.min(promptSpread, 999),
-        Math.min(pueSpread,    999),
-        Math.min(hwSpread,     999),
-    ];
-    charts.sensitivity.update('active');
+    charts.comparison = new Chart(ctx, {
+        type: 'bar',
+        data,
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#0f1f14',
+                    titleFont: chartFont,
+                    bodyFont: chartFontSmall,
+                    borderColor: 'rgba(74,222,128,0.2)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    padding: 12,
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: tickColor, font: chartFontSmall },
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: '#86efac', font: { ...chartFont, size: 12 } },
+                },
+            },
+        },
+    });
 }
 
+function buildCumulativeChart(results) {
+    const ctx = document.getElementById('cumulativeChart');
+    if (!ctx) return;
+
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const data = {
+        labels: months,
+        datasets: [
+            {
+                label: 'Max',
+                data: results.monthly.map(m => m.max),
+                borderColor: 'rgba(248, 113, 113, 0.35)',
+                backgroundColor: 'rgba(248, 113, 113, 0.06)',
+                fill: '+1', pointRadius: 0, borderWidth: 1, borderDash: [4, 3],
+            },
+            {
+                label: 'Average',
+                data: results.monthly.map(m => m.avg),
+                borderColor: '#4ade80',
+                backgroundColor: 'rgba(74, 222, 128, 0.08)',
+                fill: false, pointRadius: 4, pointBackgroundColor: '#4ade80',
+                borderWidth: 2.5, tension: 0.1,
+            },
+            {
+                label: 'Min',
+                data: results.monthly.map(m => m.min),
+                borderColor: 'rgba(45, 212, 191, 0.35)',
+                backgroundColor: 'rgba(45, 212, 191, 0.06)',
+                fill: '-1', pointRadius: 0, borderWidth: 1, borderDash: [4, 3],
+            },
+        ],
+    };
+
+    if (charts.cumulative) {
+        charts.cumulative.data = data;
+        charts.cumulative.update('none');
+        return;
+    }
+
+    charts.cumulative = new Chart(ctx, {
+        type: 'line',
+        data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    labels: { color: '#86efac', font: chartFontSmall, usePointStyle: true, pointStyleWidth: 8 },
+                },
+                tooltip: {
+                    backgroundColor: '#0f1f14',
+                    titleFont: chartFont,
+                    bodyFont: chartFontSmall,
+                    borderColor: 'rgba(74,222,128,0.2)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    padding: 12,
+                    callbacks: {
+                        label: ctx2 => `${ctx2.dataset.label}: ${fmt(ctx2.parsed.y)} gCO₂e`,
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: tickColor, font: chartFontSmall },
+                },
+                y: {
+                    grid: { color: gridColor },
+                    ticks: {
+                        color: tickColor,
+                        font: chartFontSmall,
+                        callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(1),
+                    },
+                    title: { display: true, text: 'Cumulative gCO₂e', color: tickColor, font: chartFontSmall },
+                },
+            },
+        },
+    });
+}
+
+/* ──────────── SENSITIVITY ANALYSIS ──────────── */
+
+function buildSensitivityChart(results) {
+    const ctx = document.getElementById('sensitivityChart');
+    if (!ctx) return;
+
+    const baseline = results.perQuery.avg.carbon;
+
+    // Compute range for each factor
+    const factors = [
+        {
+            label: 'Model Type',
+            min: calculate('small', 1, 'medium', 'average', 'india').perQuery.avg.carbon,
+            max: calculate('image', 1, 'medium', 'average', 'india').perQuery.avg.carbon,
+        },
+        {
+            label: 'Grid / Region',
+            min: calculate('medium', 1, 'medium', 'average', 'renewable').perQuery.avg.carbon,
+            max: calculate('medium', 1, 'medium', 'average', 'coal').perQuery.avg.carbon,
+        },
+        {
+            label: 'Prompt Length',
+            min: calculate('medium', 1, 'short', 'average', 'india').perQuery.avg.carbon,
+            max: calculate('medium', 1, 'verylong', 'average', 'india').perQuery.avg.carbon,
+        },
+        {
+            label: 'PUE Range',
+            min: (() => { const r = calculate('medium', 1, 'medium', 'average', 'india'); return r.perQuery.min.carbon * PARAMS.pue.min / PARAMS.pue.avg; })(),
+            max: (() => { const r = calculate('medium', 1, 'medium', 'average', 'india'); return r.perQuery.max.carbon * PARAMS.pue.max / PARAMS.pue.avg; })(),
+        },
+        {
+            label: 'Hardware',
+            min: calculate('medium', 1, 'medium', 'efficient', 'india').perQuery.avg.carbon,
+            max: calculate('medium', 1, 'medium', 'older', 'india').perQuery.avg.carbon,
+        },
+    ];
+
+    const spreads = factors.map(f => ((f.max - f.min) / baseline) * 100);
+
+    // Sort by impact
+    const sorted = factors.map((f, i) => ({ ...f, spread: spreads[i] }))
+                         .sort((a, b) => b.spread - a.spread);
+
+    // Update insight text
+    const topFactor = sorted[0].label.toLowerCase();
+    document.getElementById('sensitivity-insight').textContent =
+        `💡 ${sorted[0].label} has the largest impact — switching can change your footprint by up to ${Math.round(sorted[0].spread)}%. Focus here first.`;
+
+    const colors = [
+        'rgba(248, 113, 113, 0.85)',
+        'rgba(74, 222, 128, 0.85)',
+        'rgba(250, 204, 21, 0.85)',
+        'rgba(96, 165, 250, 0.85)',
+        'rgba(45, 212, 191, 0.85)',
+    ];
+
+    const data = {
+        labels: sorted.map(s => s.label),
+        datasets: [{
+            data: sorted.map(s => s.spread),
+            backgroundColor: colors,
+            borderColor: colors.map(c => c.replace('0.85', '1')),
+            borderWidth: 1.5, borderRadius: 6,
+        }],
+    };
+
+    if (charts.sensitivity) {
+        charts.sensitivity.data = data;
+        charts.sensitivity.update('none');
+        return;
+    }
+
+    charts.sensitivity = new Chart(ctx, {
+        type: 'bar',
+        data,
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: { label: c => `±${Math.round(c.parsed.x)}% spread` },
+                    backgroundColor: '#0f1f14',
+                    titleFont: chartFont,
+                    bodyFont: chartFontSmall,
+                    borderColor: 'rgba(74,222,128,0.2)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    padding: 12,
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: {
+                        color: tickColor, font: chartFontSmall,
+                        callback: v => v + '%',
+                    },
+                    title: { display: true, text: 'Relative spread in avg carbon estimate (%)', color: tickColor, font: chartFontSmall },
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: '#86efac', font: chartFont },
+                },
+            },
+        },
+    });
+}
+
+/* ──────────── CASE STUDIES ──────────── */
+
 function updateCaseStudies() {
-    const profiles = Object.entries(CASE_STUDIES);
+    const profiles = ['student', 'pro', 'heavy'];
     const csResults = {};
-    profiles.forEach(([key, p]) => {
+
+    profiles.forEach(key => {
+        const p = CASE_STUDIES[key];
         csResults[key] = calculate(p.model, p.queries, p.prompt, p.hw, p.region);
     });
 
-    // Student
-    document.getElementById('cs-student-energy').textContent = fmt(csResults.student.cumulative.daily.energy.avg)  + ' kWh/day';
-    document.getElementById('cs-student-carbon').textContent = fmt(csResults.student.cumulative.monthly.carbon.avg) + ' gCO₂e/mo';
-    document.getElementById('cs-student-water').textContent  = fmt(csResults.student.cumulative.monthly.water.avg)  + ' L/mo';
+    // Compute real-world equivalents for each profile
+    profiles.forEach(key => {
+        const r = csResults[key];
+        const cumul = r.cumulative.monthly;
 
-    // Professional
-    document.getElementById('cs-pro-energy').textContent = fmt(csResults.pro.cumulative.daily.energy.avg)   + ' kWh/day';
-    document.getElementById('cs-pro-carbon').textContent = fmt(csResults.pro.cumulative.monthly.carbon.avg)  + ' gCO₂e/mo';
-    document.getElementById('cs-pro-water').textContent  = fmt(csResults.pro.cumulative.monthly.water.avg)   + ' L/mo';
+        // Phone charges/mo
+        const phones = Math.round(cumul.avg.energy / 0.01);
+        document.getElementById(`cs-${key}-phone`).textContent = phones.toLocaleString();
 
-    // Heavy
-    document.getElementById('cs-heavy-energy').textContent = fmt(csResults.heavy.cumulative.daily.energy.avg)   + ' kWh/day';
-    document.getElementById('cs-heavy-carbon').textContent = fmt(csResults.heavy.cumulative.monthly.carbon.avg)  + ' gCO₂e/mo';
-    document.getElementById('cs-heavy-water').textContent  = fmt(csResults.heavy.cumulative.monthly.water.avg)   + ' L/mo';
+        // km driven/mo
+        const km = cumul.avg.carbon / 192;
+        document.getElementById(`cs-${key}-car`).textContent = fmt(km);
 
-    // Case study chart
-    charts.caseStudy.data.datasets[0].data = [
-        csResults.student.cumulative.monthly.carbon.min,
-        csResults.pro.cumulative.monthly.carbon.min,
-        csResults.heavy.cumulative.monthly.carbon.min,
-    ];
-    charts.caseStudy.data.datasets[1].data = [
-        csResults.student.cumulative.monthly.carbon.avg,
-        csResults.pro.cumulative.monthly.carbon.avg,
-        csResults.heavy.cumulative.monthly.carbon.avg,
-    ];
-    charts.caseStudy.data.datasets[2].data = [
-        csResults.student.cumulative.monthly.carbon.max,
-        csResults.pro.cumulative.monthly.carbon.max,
-        csResults.heavy.cumulative.monthly.carbon.max,
-    ];
-    charts.caseStudy.update('active');
+        // Water bottles/mo
+        const bottles = Math.round(cumul.avg.water / 0.5);
+        document.getElementById(`cs-${key}-bottles`).textContent = bottles.toLocaleString();
+
+        // Trees to offset/yr
+        const yearlyCarbon = r.cumulative.yearly.avg.carbon;
+        const trees = yearlyCarbon / 21000;
+        document.getElementById(`cs-${key}-trees`).textContent = fmtRange(trees);
+    });
+
+    // Generate punchy taglines
+    const studentKm = csResults.student.cumulative.monthly.avg.carbon / 192;
+    const proKm = csResults.pro.cumulative.monthly.avg.carbon / 192;
+    const heavyKm = csResults.heavy.cumulative.monthly.avg.carbon / 192;
+    const proYearlyTrees = csResults.pro.cumulative.yearly.avg.carbon / 21000;
+    const heavyYearlyTrees = csResults.heavy.cumulative.yearly.avg.carbon / 21000;
+
+    document.getElementById('cs-student-tagline').textContent =
+        `"Like driving ${fmtRange(studentKm)} km per month — about a short trip to the grocery store."`;
+
+    if (proKm >= 100) {
+        document.getElementById('cs-pro-tagline').textContent =
+            `"Like driving ${Math.round(proKm)} km per month. You'd need ${fmtRange(proYearlyTrees)} trees to offset a year of this."`;
+    } else {
+        document.getElementById('cs-pro-tagline').textContent =
+            `"Like driving ${fmtRange(proKm)} km per month — requires ${fmtRange(proYearlyTrees)} trees to offset annually."`;
+    }
+
+    document.getElementById('cs-heavy-tagline').textContent =
+        `"Like driving ${Math.round(heavyKm)} km per month — you'd need to plant ${Math.round(heavyYearlyTrees)} trees to go carbon-neutral."`;
 }
 
-/* ================================================================
-   7. MASTER UPDATE — called on every input change
-   ================================================================ */
+/* ──────────── AWARENESS FACTS ROTATION ──────────── */
 
-function updateAll() {
+function showNextFact() {
+    currentFactIndex = (currentFactIndex + 1) % AWARENESS_FACTS.length;
+    const el = document.getElementById('callout-text');
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(8px)';
+    setTimeout(() => {
+        el.innerHTML = AWARENESS_FACTS[currentFactIndex];
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+    }, 250);
+}
+
+/* ──────────── MAIN RENDER ──────────── */
+
+function render() {
     const model   = document.getElementById('model-type').value;
     const queries = parseInt(document.getElementById('queries-per-day').value, 10);
     const prompt  = document.getElementById('prompt-length').value;
@@ -538,87 +644,88 @@ function updateAll() {
     const region  = document.getElementById('region').value;
 
     const results = calculate(model, queries, prompt, hw, region);
-    currentResults = results;
 
-    // Worst-case maxes for relative bar within metric cards
-    const maxE = PARAMS.models.image.energy.max * PARAMS.promptLength.verylong.factor * PARAMS.hardware.older.factor * PARAMS.pue.max;
-    const maxC = maxE * PARAMS.regions.coal.carbon.max;
-    const maxW = maxE * (PARAMS.water.onsite.max + PARAMS.water.ewif.max) * 1000;
-
-    updateMetricCard({ avgId:'energy-avg', minId:'energy-min', maxId:'energy-max', barId:'energy-bar' }, results.perQuery.energy, maxE);
-    updateMetricCard({ avgId:'carbon-avg', minId:'carbon-min', maxId:'carbon-max', barId:'carbon-bar' }, results.perQuery.carbon, maxC);
-    updateMetricCard({ avgId:'water-avg',  minId:'water-min',  maxId:'water-max',  barId:'water-bar'  }, results.perQuery.water,  maxW);
-
-    updateCumulativePanel(results);
+    // Update all UI sections
+    generateImpactStatement(results);
+    updateMetricCards(results);
+    updateCumulative(results);
     updateEquivalents(results);
-    updateMetricsChart(results);
-    updateCumulativeChart(results, queries);
-    updateSensitivityChart(model, prompt, hw, region, queries);
+    buildComparisonChart(results);
+    buildCumulativeChart(results);
+    buildSensitivityChart(results);
+    updateCaseStudies();
+
+    // Update chart period labels
+    const periodName = { daily: 'daily', monthly: 'monthly', yearly: 'yearly' }[timeHorizon];
+    const chartPeriod1 = document.getElementById('chart-period-1');
+    if (chartPeriod1) chartPeriod1.textContent = periodName;
 }
 
-/* ================================================================
-   8. EVENT LISTENERS & INIT
-   ================================================================ */
+/* ──────────── EVENT LISTENERS ──────────── */
 
 document.addEventListener('DOMContentLoaded', () => {
-    initCharts();
-
-    // Input controls
-    document.getElementById('model-type').addEventListener('change', updateAll);
-    document.getElementById('prompt-length').addEventListener('change', updateAll);
-    document.getElementById('hardware').addEventListener('change', updateAll);
-    document.getElementById('region').addEventListener('change', updateAll);
-
-    document.getElementById('queries-per-day').addEventListener('input', e => {
-        document.getElementById('queries-display').textContent = e.target.value;
-        updateAll();
+    // Input listeners
+    ['model-type', 'prompt-length', 'hardware', 'region'].forEach(id => {
+        document.getElementById(id).addEventListener('change', render);
     });
 
-    // Time horizon toggle
+    const slider = document.getElementById('queries-per-day');
+    const display = document.getElementById('queries-display');
+    slider.addEventListener('input', () => {
+        display.textContent = slider.value;
+        render();
+    });
+
+    // Time horizon buttons
     document.querySelectorAll('.btn-option').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.btn-option').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             timeHorizon = btn.dataset.value;
-            if (currentResults) {
-                updateCumulativePanel(currentResults);
-                updateEquivalents(currentResults);
-            }
+            render();
         });
     });
 
-    // Floating tooltips
-    const tooltipEl = document.getElementById('tooltip-popup');
-    document.querySelectorAll('[data-tooltip]').forEach(el => {
-        el.addEventListener('mouseenter', () => {
-            tooltipEl.textContent = el.dataset.tooltip;
-            tooltipEl.setAttribute('aria-hidden', 'false');
-            tooltipEl.classList.add('visible');
-        });
-        el.addEventListener('mousemove', e => {
-            const x = Math.min(e.clientX + 14, window.innerWidth - tooltipEl.offsetWidth - 10);
-            const y = e.clientY - 12;
-            tooltipEl.style.left = x + 'px';
-            tooltipEl.style.top  = y + 'px';
-        });
-        el.addEventListener('mouseleave', () => {
-            tooltipEl.classList.remove('visible');
-            tooltipEl.setAttribute('aria-hidden', 'true');
-        });
-        // Keyboard accessibility
-        el.addEventListener('focus', e => {
-            tooltipEl.textContent = el.dataset.tooltip;
-            tooltipEl.classList.add('visible');
-            const rect = el.getBoundingClientRect();
-            tooltipEl.style.left = rect.left + 'px';
-            tooltipEl.style.top  = (rect.bottom + 6) + 'px';
-        });
-        el.addEventListener('blur', () => tooltipEl.classList.remove('visible'));
-    });
+    // Did you know? next button
+    const nextBtn = document.getElementById('callout-next-btn');
+    if (nextBtn) nextBtn.addEventListener('click', showNextFact);
 
-    // Run case studies (static, computed once)
-    updateCaseStudies();
+    // Auto-rotate facts every 10 seconds
+    setInterval(showNextFact, 10000);
 
-    // Initial full calculation
-    updateAll();
+    // Tooltip system
+    setupTooltips();
+
+    // Add transition to callout text
+    const calloutText = document.getElementById('callout-text');
+    if (calloutText) {
+        calloutText.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    }
+
+    // Initial render
+    render();
 });
+
+/* ──────────── TOOLTIP SYSTEM ──────────── */
+
+function setupTooltips() {
+    const popup = document.getElementById('tooltip-popup');
+    document.querySelectorAll('.tooltip-icon').forEach(icon => {
+        const text = icon.getAttribute('data-tooltip');
+        if (!text) return;
+
+        const show = () => {
+            popup.textContent = text;
+            popup.classList.add('visible');
+            const rect = icon.getBoundingClientRect();
+            popup.style.left = Math.min(rect.left, window.innerWidth - 290) + 'px';
+            popup.style.top  = (rect.bottom + 8) + 'px';
+        };
+        const hide = () => popup.classList.remove('visible');
+
+        icon.addEventListener('mouseenter', show);
+        icon.addEventListener('mouseleave', hide);
+        icon.addEventListener('focus',      show);
+        icon.addEventListener('blur',       hide);
+    });
+}

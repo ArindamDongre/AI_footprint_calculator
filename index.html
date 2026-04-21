@@ -43,11 +43,11 @@
                 <span class="gradient-text">AI usage cost the planet?</span>
             </h1>
             <p class="hero-subtitle">
-                Estimate the hidden environmental impact of every AI query — energy, carbon emissions, and water consumption — with uncertainty ranges derived from peer-reviewed literature.
+                Every AI query consumes electricity, emits carbon, and evaporates water. Most users never see this cost. This tool makes the invisible visible.
             </p>
             <div class="hero-stats" role="list">
                 <div class="hero-stat" role="listitem">
-                    <span class="stat-value">8 <span class="stat-unit">papers</span></span>
+                    <span class="stat-value">12+ <span class="stat-unit">papers</span></span>
                     <span class="stat-label">Literature-backed</span>
                 </div>
                 <div class="hero-stat" role="listitem">
@@ -79,7 +79,7 @@
                     <div class="input-group">
                         <label for="model-type">
                             Model Type
-                            <span class="tooltip-icon" data-tooltip="Larger models consume significantly more energy per query. Image generation is particularly expensive — up to 100× a small text model." aria-label="Info">ⓘ</span>
+                            <span class="tooltip-icon" data-tooltip="Larger models consume significantly more energy per query. Image generation is particularly expensive — up to 60× a small text model." aria-label="Info">ⓘ</span>
                         </label>
                         <select id="model-type" aria-describedby="model-type-desc">
                             <option value="small">🔵 Small LLM (&lt; 7B params)</option>
@@ -103,7 +103,7 @@
                     <div class="input-group">
                         <label for="prompt-length">
                             Prompt Length
-                            <span class="tooltip-icon" data-tooltip="Longer prompts require more computation at inference time, increasing energy use by up to 3× compared to very short prompts." aria-label="Info">ⓘ</span>
+                            <span class="tooltip-icon" data-tooltip="Longer prompts require more computation. Very long prompts (500+ tokens, reasoning) use up to 2.5× more energy." aria-label="Info">ⓘ</span>
                         </label>
                         <select id="prompt-length">
                             <option value="short">Short (&lt; 50 tokens)</option>
@@ -116,7 +116,7 @@
                     <div class="input-group">
                         <label for="hardware">
                             Data Center Hardware
-                            <span class="tooltip-icon" data-tooltip="Newer accelerators (H100, A100) are ~30–40% more energy-efficient than older hardware. Most large providers use modern hardware." aria-label="Info">ⓘ</span>
+                            <span class="tooltip-icon" data-tooltip="Newer accelerators (H100, A100) are ~30–40% more energy-efficient per query than older hardware." aria-label="Info">ⓘ</span>
                         </label>
                         <select id="hardware">
                             <option value="efficient">🟢 Modern / Efficient (H100, A100)</option>
@@ -128,7 +128,7 @@
                     <div class="input-group">
                         <label for="region">
                             Grid / Region
-                            <span class="tooltip-icon" data-tooltip="Carbon intensity varies hugely by region. Renewable grids can emit 18× less CO₂ per kWh than coal-heavy grids. Source: Dodge et al. (2022)." aria-label="Info">ⓘ</span>
+                            <span class="tooltip-icon" data-tooltip="Carbon intensity varies hugely by region. Renewable grids emit 18× less CO₂ per kWh than coal-heavy grids." aria-label="Info">ⓘ</span>
                         </label>
                         <select id="region">
                             <option value="renewable">🌿 Renewable-heavy (Norway, Iceland)</option>
@@ -150,22 +150,32 @@
 
                     <div class="sources-note" role="note">
                         <span aria-hidden="true">📚</span>
-                        Parameters from Luccioni et al. (2023), Ren et al. (2023), Dodge et al. (2022), IEA 2023
+                        12+ sources including Google/OpenAI 2025 disclosures, IEA 2025, CEA India, Ember, Luccioni et al., Ren et al.
                     </div>
                 </aside>
 
                 <!-- Results Area -->
                 <div class="results-area">
-                    <div class="results-header">
-                        <h2>📊 Results <span class="results-subtitle">— per query</span></h2>
-                        <div class="uncertainty-badge" aria-label="Uncertainty range shown as Min / Avg / Max">Min / Avg / Max</div>
+
+                    <!-- ★ IMPACT STATEMENT — the emotional anchor -->
+                    <div class="impact-banner glass-card" id="impact-banner" role="status" aria-live="polite">
+                        <div class="impact-label">Per-query environmental cost</div>
+                        <div class="impact-statement" id="impact-statement">
+                            Each AI query costs the planet <strong class="impact-carbon" id="impact-carbon-val">—</strong> gCO₂e
+                        </div>
+                        <div class="impact-equiv" id="impact-equiv">
+                            — equivalent to <span class="impact-highlight" id="impact-equiv-text">calculating...</span>
+                        </div>
+                        <div class="impact-range" id="impact-range">Range: — to — gCO₂e</div>
                     </div>
 
                     <!-- Per-Query Metric Cards -->
                     <div class="metrics-grid" role="region" aria-label="Per-query metrics">
-                        <div class="metric-card energy-card glass-card">
-                            <div class="metric-icon" aria-hidden="true">⚡</div>
-                            <div class="metric-label">Energy per Query</div>
+                        <div class="metric-card energy-card glass-card" id="energy-card">
+                            <div class="metric-header">
+                                <span class="metric-icon" aria-hidden="true">⚡</span>
+                                <span class="metric-label">Energy</span>
+                            </div>
                             <div class="metric-values">
                                 <span class="metric-avg" id="energy-avg" aria-live="polite">—</span>
                                 <span class="metric-unit">kWh</span>
@@ -173,14 +183,16 @@
                             <div class="metric-range">
                                 <span id="energy-min">—</span> – <span id="energy-max">—</span> kWh
                             </div>
-                            <div class="metric-bar-container" aria-hidden="true">
-                                <div class="metric-bar energy-bar" id="energy-bar"></div>
+                            <div class="metric-severity-bar" aria-hidden="true">
+                                <div class="severity-fill" id="energy-bar"></div>
                             </div>
                         </div>
 
-                        <div class="metric-card carbon-card glass-card">
-                            <div class="metric-icon" aria-hidden="true">💨</div>
-                            <div class="metric-label">Carbon per Query</div>
+                        <div class="metric-card carbon-card glass-card" id="carbon-card">
+                            <div class="metric-header">
+                                <span class="metric-icon" aria-hidden="true">💨</span>
+                                <span class="metric-label">Carbon</span>
+                            </div>
                             <div class="metric-values">
                                 <span class="metric-avg" id="carbon-avg" aria-live="polite">—</span>
                                 <span class="metric-unit">gCO₂e</span>
@@ -188,14 +200,16 @@
                             <div class="metric-range">
                                 <span id="carbon-min">—</span> – <span id="carbon-max">—</span> gCO₂e
                             </div>
-                            <div class="metric-bar-container" aria-hidden="true">
-                                <div class="metric-bar carbon-bar" id="carbon-bar"></div>
+                            <div class="metric-severity-bar" aria-hidden="true">
+                                <div class="severity-fill" id="carbon-bar"></div>
                             </div>
                         </div>
 
-                        <div class="metric-card water-card glass-card">
-                            <div class="metric-icon" aria-hidden="true">💧</div>
-                            <div class="metric-label">Water per Query</div>
+                        <div class="metric-card water-card glass-card" id="water-card">
+                            <div class="metric-header">
+                                <span class="metric-icon" aria-hidden="true">💧</span>
+                                <span class="metric-label">Water</span>
+                            </div>
                             <div class="metric-values">
                                 <span class="metric-avg" id="water-avg" aria-live="polite">—</span>
                                 <span class="metric-unit">mL</span>
@@ -203,13 +217,13 @@
                             <div class="metric-range">
                                 <span id="water-min">—</span> – <span id="water-max">—</span> mL
                             </div>
-                            <div class="metric-bar-container" aria-hidden="true">
-                                <div class="metric-bar water-bar" id="water-bar"></div>
+                            <div class="metric-severity-bar" aria-hidden="true">
+                                <div class="severity-fill" id="water-bar"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Cumulative Projection Card -->
+                    <!-- Cumulative Impact -->
                     <div class="cumulative-card glass-card" role="region" aria-label="Cumulative impact">
                         <div class="cumulative-header">
                             <h3>📈 Cumulative Impact</h3>
@@ -239,177 +253,373 @@
                 </div>
             </div>
 
-            <!-- ===== CHARTS ROW ===== -->
-            <section class="charts-section" aria-labelledby="charts-heading">
-                <h2 id="charts-heading" class="visually-hidden">Visualizations</h2>
-                <div class="charts-grid">
-                    <div class="chart-card glass-card">
-                        <h3>Impact Relative to Maximum (∿ % scale)</h3>
-                        <p class="chart-sub">How your configuration compares to the worst-case scenario across all parameters</p>
-                        <div class="chart-wrapper">
-                            <canvas id="metricsChart" aria-label="Per-query metrics chart"></canvas>
-                        </div>
-                    </div>
-                    <div class="chart-card glass-card">
-                        <h3>Cumulative Carbon Over 12 Months</h3>
-                        <p class="chart-sub">Projected carbon emissions with min / avg / max uncertainty band</p>
-                        <div class="chart-wrapper">
-                            <canvas id="cumulativeChart" aria-label="Cumulative carbon chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== REAL-WORLD EQUIVALENTS ===== -->
+            <!-- ===== WHAT THIS ACTUALLY MEANS — the emotional core ===== -->
             <section class="equivalents-section" aria-labelledby="equiv-heading">
                 <div class="section-header">
-                    <h2 id="equiv-heading">🌍 Real-World Equivalents</h2>
-                    <p>What does your estimated <strong id="equiv-period">monthly</strong> AI usage actually mean?</p>
+                    <h2 id="equiv-heading">🌍 What This Actually Means</h2>
+                    <p>Your estimated <strong id="equiv-period">monthly</strong> AI usage, translated into things you can feel</p>
                 </div>
                 <div class="equivalents-grid" role="list">
                     <div class="equiv-card glass-card" role="listitem">
                         <span class="equiv-icon" aria-hidden="true">📱</span>
                         <div class="equiv-value" id="eq-phone">—</div>
-                        <div class="equiv-label">Smartphone charges</div>
-                        <div class="equiv-sub">~10 Wh per full charge</div>
+                        <div class="equiv-label">smartphone charges</div>
+                        <div class="equiv-context">~10 Wh per full charge</div>
                     </div>
                     <div class="equiv-card glass-card" role="listitem">
                         <span class="equiv-icon" aria-hidden="true">🚗</span>
                         <div class="equiv-value" id="eq-car">—</div>
                         <div class="equiv-label">km driven by car</div>
-                        <div class="equiv-sub">~192 gCO₂e per km</div>
+                        <div class="equiv-context">Average car: ~192 gCO₂/km</div>
                     </div>
                     <div class="equiv-card glass-card" role="listitem">
-                        <span class="equiv-icon" aria-hidden="true">🫙</span>
+                        <span class="equiv-icon" aria-hidden="true">💧</span>
                         <div class="equiv-value" id="eq-water">—</div>
-                        <div class="equiv-label">500 mL water bottles</div>
-                        <div class="equiv-sub">Direct + indirect cooling</div>
+                        <div class="equiv-label">water bottles (500mL)</div>
+                        <div class="equiv-context">Direct + indirect cooling</div>
                     </div>
                     <div class="equiv-card glass-card" role="listitem">
                         <span class="equiv-icon" aria-hidden="true">🌳</span>
                         <div class="equiv-value" id="eq-tree">—</div>
-                        <div class="equiv-label">Trees needed to offset</div>
-                        <div class="equiv-sub">~21 kg CO₂ absorbed per tree/year</div>
+                        <div class="equiv-label">trees needed to offset</div>
+                        <div class="equiv-context">~21 kg CO₂ per tree/year</div>
+                    </div>
+                    <div class="equiv-card glass-card" role="listitem">
+                        <span class="equiv-icon" aria-hidden="true">🔍</span>
+                        <div class="equiv-value" id="eq-search">—</div>
+                        <div class="equiv-label">Google searches</div>
+                        <div class="equiv-context">~0.3 Wh per search</div>
                     </div>
                     <div class="equiv-card glass-card" role="listitem">
                         <span class="equiv-icon" aria-hidden="true">🏠</span>
                         <div class="equiv-value" id="eq-house">—</div>
-                        <div class="equiv-label">% of household electricity</div>
-                        <div class="equiv-sub">~3,500 kWh/year average</div>
+                        <div class="equiv-label">of household electricity</div>
+                        <div class="equiv-context">~3,500 kWh/year avg</div>
                     </div>
                 </div>
             </section>
 
-            <!-- ===== SENSITIVITY ANALYSIS ===== -->
-            <section class="sensitivity-section" aria-labelledby="sens-heading">
-                <div class="section-header">
-                    <h2 id="sens-heading">🎛️ Sensitivity Analysis</h2>
-                    <p>Which parameter has the largest impact on your carbon footprint?</p>
+            <!-- ===== DID YOU KNOW? ===== -->
+            <div class="callout-card glass-card" role="complementary" aria-label="Did you know">
+                <div class="callout-icon" aria-hidden="true">💡</div>
+                <div class="callout-content">
+                    <div class="callout-title">Did you know?</div>
+                    <div class="callout-text" id="callout-text">
+                        A single image generation query uses as much energy as charging your smartphone 1.5 times. Text queries use 60× less energy.
+                    </div>
                 </div>
-                <div class="chart-card glass-card sensitivity-card">
-                    <canvas id="sensitivityChart" aria-label="Sensitivity analysis chart"></canvas>
+                <button class="callout-next" id="callout-next-btn" aria-label="Next fact">→</button>
+            </div>
+
+            <!-- ===== VISUALIZATIONS ===== -->
+            <section class="charts-section" aria-labelledby="charts-heading">
+                <h2 id="charts-heading" class="visually-hidden">Visualizations</h2>
+                <div class="charts-grid">
+                    <div class="chart-card glass-card">
+                        <h3>Your AI Usage vs Everyday Activities</h3>
+                        <p class="chart-sub">How your <span id="chart-period-1">monthly</span> AI footprint compares to familiar actions</p>
+                        <div class="chart-wrapper">
+                            <canvas id="comparisonChart" aria-label="AI vs everyday activities comparison"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card glass-card">
+                        <h3>If you keep this up for a year...</h3>
+                        <p class="chart-sub">Projected cumulative carbon with uncertainty band</p>
+                        <div class="chart-wrapper">
+                            <canvas id="cumulativeChart" aria-label="Cumulative carbon projection"></canvas>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <!-- ===== CASE STUDIES ===== -->
+            <!-- ===== CASE STUDIES — Student vs Professional ===== -->
             <section class="case-studies-section" aria-labelledby="cs-heading">
                 <div class="section-header">
-                    <h2 id="cs-heading">👥 Usage Case Studies</h2>
-                    <p>Pre-computed estimates for three representative user profiles (India grid, average hardware)</p>
+                    <h2 id="cs-heading">👥 Student vs Professional</h2>
+                    <p>How different usage patterns translate to real-world impact</p>
                 </div>
                 <div class="case-studies-grid">
 
                     <div class="case-card student-case glass-card">
-                        <span class="case-icon" aria-hidden="true">🎓</span>
-                        <h3>Student</h3>
-                        <p class="case-description">Using a medium LLM (e.g., ChatGPT) for assignments, coding help, and summarization</p>
+                        <div class="case-header">
+                            <span class="case-icon" aria-hidden="true">🎓</span>
+                            <div>
+                                <h3>Student</h3>
+                                <p class="case-description">Homework help, coding, summarization</p>
+                            </div>
+                        </div>
                         <div class="case-params" aria-label="Profile parameters">
-                            <span class="param-tag">30–50 queries/day</span>
+                            <span class="param-tag">40 queries/day</span>
                             <span class="param-tag">Medium LLM</span>
-                            <span class="param-tag">Medium prompts</span>
                             <span class="param-tag">India grid</span>
                         </div>
-                        <div class="case-metrics">
-                            <div class="case-metric">
-                                <span class="cmetric-label">⚡ Daily energy</span>
-                                <span class="cmetric-value" id="cs-student-energy">—</span>
+                        <div class="case-equivalents" id="cs-student-equivs">
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">📱</span>
+                                <span class="case-eq-value" id="cs-student-phone">—</span>
+                                <span class="case-eq-label">phone charges/mo</span>
                             </div>
-                            <div class="case-metric">
-                                <span class="cmetric-label">💨 Monthly carbon</span>
-                                <span class="cmetric-value" id="cs-student-carbon">—</span>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">🚗</span>
+                                <span class="case-eq-value" id="cs-student-car">—</span>
+                                <span class="case-eq-label">km driven/mo</span>
                             </div>
-                            <div class="case-metric">
-                                <span class="cmetric-label">💧 Monthly water</span>
-                                <span class="cmetric-value" id="cs-student-water">—</span>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">💧</span>
+                                <span class="case-eq-value" id="cs-student-bottles">—</span>
+                                <span class="case-eq-label">water bottles/mo</span>
+                            </div>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">🌳</span>
+                                <span class="case-eq-value" id="cs-student-trees">—</span>
+                                <span class="case-eq-label">trees to offset/yr</span>
                             </div>
                         </div>
+                        <div class="case-tagline" id="cs-student-tagline">—</div>
                     </div>
 
                     <div class="case-card professional-case glass-card">
-                        <span class="case-icon" aria-hidden="true">💼</span>
-                        <h3>Working Professional</h3>
-                        <p class="case-description">Developer using large LLMs for code generation, debugging, and content creation</p>
+                        <div class="case-header">
+                            <span class="case-icon" aria-hidden="true">💼</span>
+                            <div>
+                                <h3>Working Professional</h3>
+                                <p class="case-description">Code generation, debugging, content</p>
+                            </div>
+                        </div>
                         <div class="case-params" aria-label="Profile parameters">
-                            <span class="param-tag">200–300 queries/day</span>
+                            <span class="param-tag">200 queries/day</span>
                             <span class="param-tag">Large LLM</span>
-                            <span class="param-tag">Long prompts</span>
                             <span class="param-tag">US grid</span>
                         </div>
-                        <div class="case-metrics">
-                            <div class="case-metric">
-                                <span class="cmetric-label">⚡ Daily energy</span>
-                                <span class="cmetric-value" id="cs-pro-energy">—</span>
+                        <div class="case-equivalents" id="cs-pro-equivs">
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">📱</span>
+                                <span class="case-eq-value" id="cs-pro-phone">—</span>
+                                <span class="case-eq-label">phone charges/mo</span>
                             </div>
-                            <div class="case-metric">
-                                <span class="cmetric-label">💨 Monthly carbon</span>
-                                <span class="cmetric-value" id="cs-pro-carbon">—</span>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">🚗</span>
+                                <span class="case-eq-value" id="cs-pro-car">—</span>
+                                <span class="case-eq-label">km driven/mo</span>
                             </div>
-                            <div class="case-metric">
-                                <span class="cmetric-label">💧 Monthly water</span>
-                                <span class="cmetric-value" id="cs-pro-water">—</span>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">💧</span>
+                                <span class="case-eq-value" id="cs-pro-bottles">—</span>
+                                <span class="case-eq-label">water bottles/mo</span>
+                            </div>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">🌳</span>
+                                <span class="case-eq-value" id="cs-pro-trees">—</span>
+                                <span class="case-eq-label">trees to offset/yr</span>
                             </div>
                         </div>
+                        <div class="case-tagline" id="cs-pro-tagline">—</div>
                     </div>
 
                     <div class="case-card heavy-case glass-card">
-                        <span class="case-icon" aria-hidden="true">🔬</span>
-                        <h3>Heavy AI User / Researcher</h3>
-                        <p class="case-description">Researcher using large LLMs + image generation for prototyping, experiments, and content</p>
+                        <div class="case-header">
+                            <span class="case-icon" aria-hidden="true">🔬</span>
+                            <div>
+                                <h3>Heavy AI User</h3>
+                                <p class="case-description">Research, prototyping, image gen</p>
+                            </div>
+                        </div>
                         <div class="case-params" aria-label="Profile parameters">
-                            <span class="param-tag">500+ queries/day</span>
-                            <span class="param-tag">Large LLM + Image Gen</span>
-                            <span class="param-tag">Long prompts</span>
+                            <span class="param-tag">500 queries/day</span>
+                            <span class="param-tag">Large LLM</span>
                             <span class="param-tag">US grid</span>
                         </div>
-                        <div class="case-metrics">
-                            <div class="case-metric">
-                                <span class="cmetric-label">⚡ Daily energy</span>
-                                <span class="cmetric-value" id="cs-heavy-energy">—</span>
+                        <div class="case-equivalents" id="cs-heavy-equivs">
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">📱</span>
+                                <span class="case-eq-value" id="cs-heavy-phone">—</span>
+                                <span class="case-eq-label">phone charges/mo</span>
                             </div>
-                            <div class="case-metric">
-                                <span class="cmetric-label">💨 Monthly carbon</span>
-                                <span class="cmetric-value" id="cs-heavy-carbon">—</span>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">🚗</span>
+                                <span class="case-eq-value" id="cs-heavy-car">—</span>
+                                <span class="case-eq-label">km driven/mo</span>
                             </div>
-                            <div class="case-metric">
-                                <span class="cmetric-label">💧 Monthly water</span>
-                                <span class="cmetric-value" id="cs-heavy-water">—</span>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">💧</span>
+                                <span class="case-eq-value" id="cs-heavy-bottles">—</span>
+                                <span class="case-eq-label">water bottles/mo</span>
+                            </div>
+                            <div class="case-eq-item">
+                                <span class="case-eq-icon">🌳</span>
+                                <span class="case-eq-value" id="cs-heavy-trees">—</span>
+                                <span class="case-eq-label">trees to offset/yr</span>
                             </div>
                         </div>
+                        <div class="case-tagline" id="cs-heavy-tagline">—</div>
                     </div>
                 </div>
+            </section>
 
-                <!-- Case study comparison chart -->
-                <div class="chart-card glass-card" style="margin-top: 2rem;">
-                    <h3>Monthly Carbon Footprint — User Profile Comparison</h3>
-                    <p class="chart-sub">Contrast between casual, professional, and intensive AI usage</p>
-                    <div class="chart-wrapper">
-                        <canvas id="caseStudyChart" aria-label="Case study comparison chart"></canvas>
+            <!-- ===== WHAT MATTERS MOST (Sensitivity) ===== -->
+            <section class="sensitivity-section" aria-labelledby="sens-heading">
+                <div class="section-header">
+                    <h2 id="sens-heading">🎛️ What Matters Most?</h2>
+                    <p>Which factor has the biggest leverage on your carbon footprint?</p>
+                </div>
+                <div class="chart-card glass-card sensitivity-card">
+                    <p class="sensitivity-insight" id="sensitivity-insight">💡 The model type you choose has the largest impact on your footprint.</p>
+                    <canvas id="sensitivityChart" aria-label="Sensitivity analysis chart"></canvas>
+                </div>
+            </section>
+
+            <!-- ===== TIPS FOR MINDFUL AI USAGE ===== -->
+            <section class="tips-section" aria-labelledby="tips-heading">
+                <div class="section-header">
+                    <h2 id="tips-heading">🌱 Reduce Your AI Footprint</h2>
+                    <p>Small changes in how you use AI can make a measurable difference</p>
+                </div>
+                <div class="tips-grid">
+                    <div class="tip-card glass-card">
+                        <span class="tip-icon" aria-hidden="true">🔵</span>
+                        <h4>Use smaller models for simple tasks</h4>
+                        <p>A small LLM uses <strong>up to 95% less energy</strong> than a large one. Not every question needs GPT-4.</p>
+                    </div>
+                    <div class="tip-card glass-card">
+                        <span class="tip-icon" aria-hidden="true">✂️</span>
+                        <h4>Keep prompts concise</h4>
+                        <p>Very long prompts use <strong>2.5× more energy</strong>. Be specific and direct — it's better for you and the planet.</p>
+                    </div>
+                    <div class="tip-card glass-card">
+                        <span class="tip-icon" aria-hidden="true">🌿</span>
+                        <h4>Choose green providers</h4>
+                        <p>A data center on renewable energy emits <strong>14× less carbon</strong> than one on a coal-heavy grid.</p>
+                    </div>
+                    <div class="tip-card glass-card">
+                        <span class="tip-icon" aria-hidden="true">🤔</span>
+                        <h4>Ask: "Do I need AI for this?"</h4>
+                        <p>A Google search uses <strong>~0.3 Wh</strong>. A ChatGPT query uses ~0.7 Wh. Sometimes search is enough.</p>
                     </div>
                 </div>
             </section>
 
         </div>
     </main>
+
+    <!-- ===== METHODOLOGY & SOURCES SECTION ===== -->
+    <section class="methodology-section" id="methodology" aria-labelledby="method-heading">
+        <div class="container">
+            <div class="section-header">
+                <h2 id="method-heading">📋 Methodology & Sources</h2>
+                <p>Complete documentation of formulas, parameter tables, and citations</p>
+            </div>
+
+            <details class="method-details glass-card" id="method-formulas">
+                <summary class="method-summary">📐 Core Formulas</summary>
+                <div class="method-content">
+                    <div class="formula-block">
+                        <h4>Step 1 — Server-side Energy per Query</h4>
+                        <code class="formula">E<sub>server</sub> = α<sub>m</sub> × β<sub>l</sub> × γ<sub>h</sub>  [kWh/query]</code>
+                        <p>Where α<sub>m</sub> = base energy for model class, β<sub>l</sub> = prompt-length factor, γ<sub>h</sub> = hardware efficiency factor</p>
+                    </div>
+                    <div class="formula-block">
+                        <h4>Step 2 — Facility Energy (with PUE overhead)</h4>
+                        <code class="formula">E<sub>facility</sub> = E<sub>server</sub> × PUE  [kWh/query]</code>
+                        <p>PUE > 1.0 accounts for cooling, power distribution, lighting. Range: 1.10 (hyperscaler) – 1.58 (global avg)</p>
+                    </div>
+                    <div class="formula-block">
+                        <h4>Step 3 — Carbon Emissions</h4>
+                        <code class="formula">C<sub>query</sub> = E<sub>facility</sub> × I<sub>grid</sub>  [gCO₂e/query]</code>
+                        <p>I<sub>grid</sub> = regional carbon intensity (gCO₂e/kWh). Range: 20 (renewable) – 950 (coal-heavy)</p>
+                    </div>
+                    <div class="formula-block">
+                        <h4>Step 4 — Water Usage</h4>
+                        <code class="formula">W<sub>query</sub> = E<sub>facility</sub> × (WUE + EWIF) × 1000  [mL/query]</code>
+                        <p>WUE = on-site cooling water, EWIF = electricity-withdrawal intensity factor (both L/kWh)</p>
+                    </div>
+                    <div class="formula-block">
+                        <h4>Step 5 — Uncertainty Propagation</h4>
+                        <code class="formula">min = all best-case params &nbsp;|&nbsp; avg = all average params &nbsp;|&nbsp; max = all worst-case params</code>
+                    </div>
+                </div>
+            </details>
+
+            <details class="method-details glass-card" id="method-energy">
+                <summary class="method-summary">⚡ Energy per Query — Parameter Table</summary>
+                <div class="method-content">
+                    <p class="method-note">Calibrated against 2025 industry disclosures. Google (Aug 2025): Gemini median text = 0.24 Wh. OpenAI (Jun 2025): ChatGPT avg = 0.34 Wh.</p>
+                    <table class="method-table">
+                        <thead><tr><th>Model Type</th><th>Min (Wh)</th><th>Avg (Wh)</th><th>Max (Wh)</th><th>Sources</th></tr></thead>
+                        <tbody>
+                            <tr><td>Small LLM (&lt;7B)</td><td>0.10</td><td>0.24</td><td>0.50</td><td>[7,9] Google Gemini</td></tr>
+                            <tr><td>Medium LLM (7–70B)</td><td>0.30</td><td>0.70</td><td>2.00</td><td>[8,9] OpenAI; Epoch AI</td></tr>
+                            <tr><td>Large LLM (&gt;70B)</td><td>1.00</td><td>3.00</td><td>10.0</td><td>[1,9] Luccioni; reasoning</td></tr>
+                            <tr><td>Image Generation</td><td>3.00</td><td>15.0</td><td>50.0</td><td>[1] Luccioni 2023</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details class="method-details glass-card" id="method-carbon">
+                <summary class="method-summary">💨 Regional Carbon Intensity</summary>
+                <div class="method-content">
+                    <p class="method-note">Updated with Ember Global Electricity Review 2025 and CEA India FY2024-25.</p>
+                    <table class="method-table">
+                        <thead><tr><th>Region</th><th>Min</th><th>Avg</th><th>Max</th><th>Source</th></tr></thead>
+                        <tbody>
+                            <tr><td>🌿 Renewable</td><td>20</td><td>50</td><td>100</td><td>ElectricityMaps</td></tr>
+                            <tr><td>🇪🇺 EU Average</td><td>150</td><td>213</td><td>300</td><td>[12] Ember 2025</td></tr>
+                            <tr><td>🇺🇸 US Average</td><td>300</td><td>384</td><td>450</td><td>[12] Ember 2024</td></tr>
+                            <tr><td>🇮🇳 India</td><td>650</td><td>710</td><td>800</td><td>[11] CEA FY2024-25</td></tr>
+                            <tr><td>⚫ Coal-heavy</td><td>750</td><td>850</td><td>950</td><td>ElectricityMaps</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details class="method-details glass-card" id="method-water">
+                <summary class="method-summary">💧 Water & Infrastructure Parameters</summary>
+                <div class="method-content">
+                    <table class="method-table">
+                        <thead><tr><th>Parameter</th><th>Min</th><th>Avg</th><th>Max</th><th>Source</th></tr></thead>
+                        <tbody>
+                            <tr><td>PUE</td><td>1.10</td><td>1.30</td><td>1.58</td><td>[10] Uptime 2025</td></tr>
+                            <tr><td>WUE (L/kWh)</td><td>0.00</td><td>0.50</td><td>1.80</td><td>[2] Ren 2023</td></tr>
+                            <tr><td>EWIF (L/kWh)</td><td>1.00</td><td>2.80</td><td>5.50</td><td>[2] Ren 2023</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details class="method-details glass-card" id="method-refs">
+                <summary class="method-summary">📚 Complete Bibliography (13 Sources)</summary>
+                <div class="method-content">
+                    <ol class="method-bibliography">
+                        <li><strong>[1]</strong> Luccioni et al. (2023/2024). <em>Power Hungry Processing.</em> ACM FAccT. <a href="https://arxiv.org/abs/2311.16863" target="_blank" rel="noopener">arXiv</a></li>
+                        <li><strong>[2]</strong> Li, Yang, Islam & Ren (2023). <em>Making AI Less "Thirsty".</em> <a href="https://arxiv.org/abs/2304.03271" target="_blank" rel="noopener">arXiv</a></li>
+                        <li><strong>[3]</strong> Dodge et al. (2022). <em>Measuring Carbon Intensity of AI.</em> ACM FAccT.</li>
+                        <li><strong>[4]</strong> Patterson et al. (2021). <em>Carbon Emissions of Large NNs.</em> <a href="https://arxiv.org/abs/2104.10350" target="_blank" rel="noopener">arXiv</a></li>
+                        <li><strong>[5]</strong> Patterson et al. (2022). <em>ML Carbon Footprint Will Plateau.</em> IEEE Computer.</li>
+                        <li><strong>[6]</strong> IEA (2025/2026). <em>Data Centre Energy Demand.</em> 415 TWh (2024), projected 945 TWh by 2030.</li>
+                        <li><strong>[7]</strong> Google (Aug 2025). <em>Measuring the Environmental Impact of AI Inference.</em> Gemini median text = 0.24 Wh. 33× efficiency gain in 12 months. <a href="https://cloud.google.com/blog/products/infrastructure/measuring-the-environmental-impact-of-ai-inference/" target="_blank" rel="noopener">Google Cloud Blog</a></li>
+                        <li><strong>[8]</strong> Altman, S. (Jun 2025). <em>The Gentle Singularity.</em> ChatGPT avg query = 0.34 Wh. <a href="https://blog.samaltman.com/the-gentle-singularity" target="_blank" rel="noopener">blog.samaltman.com</a></li>
+                        <li><strong>[9]</strong> Epoch AI (2025). <em>Inference Economics of Language Models.</em> <a href="https://epoch.ai/blog/inference-economics-of-language-models" target="_blank" rel="noopener">epoch.ai</a></li>
+                        <li><strong>[10]</strong> Uptime Institute (2025). Global PUE avg = 1.56. Google 1.09.</li>
+                        <li><strong>[11]</strong> CEA India (FY2024-25). Grid = 710 gCO₂/MWh.</li>
+                        <li><strong>[12]</strong> Ember (2025). EU = 213, US = 384 gCO₂/kWh.</li>
+                        <li><strong>[13]</strong> EcoLogits (2024). LCA methodology. ISO 14044. <a href="https://ecologits.ai" target="_blank" rel="noopener">ecologits.ai</a></li>
+                    </ol>
+                </div>
+            </details>
+
+            <details class="method-details glass-card" id="method-scope">
+                <summary class="method-summary">⚠️ Scope & Limitations</summary>
+                <div class="method-content">
+                    <ul class="method-list">
+                        <li><strong>Inference only:</strong> Pre-training, fine-tuning, and hardware manufacturing are out of scope.</li>
+                        <li><strong>Uncertainty model:</strong> Min/avg/max uses independent best/worst-case propagation.</li>
+                        <li><strong>Energy anchoring:</strong> Calibrated to 2025 disclosures (Google 0.24 Wh, OpenAI 0.34 Wh).</li>
+                        <li><strong>Educational tool:</strong> Approximations for awareness, not audit-grade measurements.</li>
+                    </ul>
+                </div>
+            </details>
+        </div>
+    </section>
 
     <!-- ===== FOOTER ===== -->
     <footer class="footer" role="contentinfo">
@@ -418,30 +628,31 @@
                 <div class="footer-col">
                     <h4>Methodology</h4>
                     <p>
-                        Energy estimates follow Luccioni et al. (2023). Carbon intensity by region from Dodge et al. (2022). Water consumption model from Ren et al. (2023). PUE ranges from IEA Electricity 2023. All values shown with min / avg / max uncertainty ranges.
+                        Energy calibrated against Google (2025) and OpenAI (2025) disclosures, with ranges from Luccioni et al. (2023). Carbon from Ember (2025) and CEA India (FY2024-25). Water from Ren et al. (2023). PUE from Uptime Institute (2025). All values with min / avg / max.
                     </p>
                 </div>
                 <div class="footer-col">
-                    <h4>Scope Disclaimer</h4>
+                    <h4>Scope</h4>
                     <p>
-                        This tool estimates <strong>inference-only</strong> environmental costs. Pre-training, fine-tuning, hardware manufacturing (embodied carbon), and scope-3 emissions are explicitly out of scope. Estimates are educational approximations, not audit instruments.
+                        This tool estimates <strong>inference-only</strong> environmental costs. Pre-training, fine-tuning, hardware manufacturing, and scope-3 emissions are out of scope. Estimates are educational approximations.
                     </p>
                 </div>
                 <div class="footer-col">
-                    <h4>Key References</h4>
+                    <h4>References</h4>
                     <ul class="refs-list">
-                        <li>Luccioni et al. (2023) — BLOOM carbon footprint (JMLR)</li>
-                        <li>Ren et al. (2023) — AI water footprint (arXiv:2304.03271)</li>
-                        <li>Dodge et al. (2022) — Carbon intensity of AI (ACM FAccT)</li>
-                        <li>Patterson et al. (2021) — Large NN training (arXiv:2104.10350)</li>
-                        <li>IEA Electricity 2023 — Data-center PUE</li>
-                        <li>GPTFootprint (2025) — Comparable browser tool</li>
+                        <li>Luccioni et al. (2023) — Power Hungry Processing</li>
+                        <li>Ren et al. (2023) — AI water footprint</li>
+                        <li>Dodge et al. (2022) — Carbon intensity of AI</li>
+                        <li>Patterson et al. (2021, 2022) — ML carbon</li>
+                        <li>IEA (2025), Google, OpenAI, Epoch AI (2025)</li>
+                        <li>Uptime (2025), CEA India, Ember (2025)</li>
+                        <li>EcoLogits (2024) — LCA methodology</li>
                     </ul>
                 </div>
             </div>
             <div class="footer-bottom">
                 <span>COL8381 — Special Topics in AI: Responsible AI</span>
-                <span>2025MCS2092 &amp; 2025MCS2096</span>
+                <span>2025MCS2092 & 2025MCS2096</span>
             </div>
         </div>
     </footer>
